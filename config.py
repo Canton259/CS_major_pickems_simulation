@@ -3,7 +3,7 @@ CS2 Major Pick'Em 模拟器配置文件。
 
 这个文件负责三件事：
 1. 定义队伍和赛事配置的数据结构；
-2. 从 JSON 安全加载队伍、评分系统和 sigma 参数；
+2. 从 JSON 安全加载队伍、评分系统、sigma 和权重参数；
 3. 计算任意两支队伍之间的单图胜率。
 """
 
@@ -21,6 +21,13 @@ HLTV_WEIGHT = 0.5  # HLTV 评分系统权重
 # 兼容旧调用的默认 sigma。真实模拟时优先使用 major_stage.json 中的 sigma。
 SIGMA = 349.2
 
+# 概率裁剪区间，避免模型给出过于极端的单图胜率。
+PROBABILITY_FLOOR = 0.03
+PROBABILITY_CEILING = 0.97
+
+# 当前胜率模型明确使用前两个评分系统：valve 和 hltv。
+REQUIRED_SYSTEMS = ("valve", "hltv")
+
 
 @dataclass(frozen=True)
 class Team:
@@ -31,7 +38,7 @@ class Team:
         id: 队伍唯一标识符，用于稳定哈希。
         name: 队伍名称。
         seed: 初始种子排名，数字越小种子越高。
-        rating: 按 JSON 中 systems 顺序排列的评分元组。
+        rating: 按 TournamentConfig.systems 顺序排列的评分元组。
     """
 
     id: int
@@ -54,11 +61,13 @@ class TournamentConfig:
     Attributes:
         systems: 评分系统名称，例如 ("valve", "hltv")。
         sigma: 与 systems 顺序一致的 sigma 元组。
+        weights: 与 systems 顺序一致的权重元组。
         teams: 按 JSON 文件顺序加载的队伍列表。
     """
 
     systems: Tuple[str, ...]
     sigma: Tuple[float, ...]
+    weights: Tuple[float, ...]
     teams: Tuple[Team, ...]
 
 
@@ -92,6 +101,56 @@ def _apply_system_transform(system_name: str, transform_name: str, value: Any) -
     return float(SYSTEM_TRANSFORMS[transform_name](value))
 
 
+def _default_weight_for_system(system_name: str) -> float:
+    """
+    返回评分系统的默认权重。
+
+    旧配置文件没有 weights 字段时，valve/vrs 回退到 VRS_WEIGHT，
+    hltv 回退到 HLTV_WEIGHT；未知评分系统给 1.0，避免破坏扩展配置。
+    """
+    normalized = system_name.lower()
+    if normalized in {"valve", "vrs"}:
+        return VRS_WEIGHT
+    if normalized == "hltv":
+        return HLTV_WEIGHT
+    return 1.0
+
+
+def _ordered_system_names(systems_data: Dict[str, str]) -> Tuple[str, ...]:
+    """
+    固定模型依赖的评分系统顺序。
+
+    win_probability 使用 rating[0] 作为 valve，rating[1] 作为 hltv；
+    因此这里必须把这两个系统排在最前，避免 JSON 字段顺序改变后结果失真。
+    """
+    missing = [system_name for system_name in REQUIRED_SYSTEMS if system_name not in systems_data]
+    if missing:
+        raise ValueError(f"配置文件缺少必要评分系统：{', '.join(missing)}")
+
+    extra_systems = tuple(
+        system_name for system_name in systems_data.keys() if system_name not in REQUIRED_SYSTEMS
+    )
+    return REQUIRED_SYSTEMS + extra_systems
+
+
+def _validate_positive_values(values: Tuple[float, ...], label: str) -> None:
+    """校验一组参数必须大于 0。"""
+    for index, value in enumerate(values):
+        if value <= 0:
+            raise ValueError(f"{label}[{index}] 必须大于 0，当前值为 {value}")
+
+
+def _validate_weights(weights: Tuple[float, ...]) -> None:
+    """校验权重必须非负，且模型实际使用的前两个权重不能同时为 0。"""
+    for index, weight in enumerate(weights):
+        if weight < 0:
+            raise ValueError(f"weights[{index}] 必须大于等于 0，当前值为 {weight}")
+
+    active_weight_sum = sum(weights[: len(REQUIRED_SYSTEMS)])
+    if active_weight_sum <= 0:
+        raise ValueError("valve 和 hltv 的权重不能同时为 0")
+
+
 def load_tournament_config(file_path: str | Path) -> TournamentConfig:
     """
     从 JSON 文件加载完整赛事配置。
@@ -100,7 +159,7 @@ def load_tournament_config(file_path: str | Path) -> TournamentConfig:
         file_path: JSON 文件路径。
 
     Returns:
-        TournamentConfig: 包含评分系统、sigma 和队伍数据的配置对象。
+        TournamentConfig: 包含评分系统、sigma、权重和队伍数据的配置对象。
     """
     path = Path(file_path)
     with path.open("r", encoding="utf-8") as file:
@@ -110,11 +169,20 @@ def load_tournament_config(file_path: str | Path) -> TournamentConfig:
     if not systems_data:
         raise ValueError("配置文件缺少 systems 字段，无法判断评分系统顺序")
 
-    system_names = tuple(systems_data.keys())
+    system_names = _ordered_system_names(systems_data)
 
     # sigma 按 systems 顺序读取；缺失时回退到兼容旧代码的默认 SIGMA。
     sigma_data = data.get("sigma", {})
     sigma = tuple(float(sigma_data.get(system_name, SIGMA)) for system_name in system_names)
+    _validate_positive_values(sigma, "sigma")
+
+    # weights 同样按 systems 顺序读取；缺失时回退到 config.py 中的全局常量。
+    weights_data = data.get("weights") or {}
+    weights = tuple(
+        float(weights_data.get(system_name, _default_weight_for_system(system_name)))
+        for system_name in system_names
+    )
+    _validate_weights(weights)
 
     teams = []
     for team_id, (team_name, team_data) in enumerate(data["teams"].items()):
@@ -134,6 +202,7 @@ def load_tournament_config(file_path: str | Path) -> TournamentConfig:
     return TournamentConfig(
         systems=system_names,
         sigma=sigma,
+        weights=weights,
         teams=tuple(teams),
     )
 
@@ -149,13 +218,26 @@ def load_teams(file_path: str | Path) -> List[Team]:
 
 
 @lru_cache(maxsize=None)
-def win_probability(a: Team, b: Team, sigma: Tuple[float, ...] = (SIGMA, SIGMA)) -> float:
+def win_probability(
+    a: Team,
+    b: Team,
+    sigma: Tuple[float, ...] = (SIGMA, SIGMA),
+    clamp: Tuple[float, float] = (PROBABILITY_FLOOR, PROBABILITY_CEILING),
+    weights: Tuple[float, ...] | None = None,
+) -> float:
     """
     计算队伍 a 在单图中战胜队伍 b 的概率。
 
     当前模型使用两部分信息：
     1. Valve/VRS 评分差，走 Elo 形式；
-    2. HLTV 分数比例，作为另一路经验信号。
+    2. HLTV 评分差，也走 Elo/logistic 形式。
+
+    Args:
+        a: 队伍 a。
+        b: 队伍 b。
+        sigma: 与评分系统顺序一致的 sigma 元组；sigma[0] 给 VRS，sigma[1] 给 HLTV。
+        clamp: 概率裁剪区间，默认限制在 3% 到 97%。
+        weights: 与评分系统顺序一致的权重元组；缺失时回退到全局常量。
     """
     if len(a.rating) < 2 or len(b.rating) < 2:
         raise ValueError("胜率模型至少需要 valve 和 hltv 两个评分系统")
@@ -165,23 +247,43 @@ def win_probability(a: Team, b: Team, sigma: Tuple[float, ...] = (SIGMA, SIGMA))
 
     # VRS 使用 Elo 公式；sigma 越大，评分差对胜率的影响越平缓。
     vrs_sigma = sigma[0] if sigma else SIGMA
+    if vrs_sigma <= 0:
+        raise ValueError(f"vrs_sigma 必须大于 0，当前值为 {vrs_sigma}")
     p_vrs = 1 / (1 + 10 ** ((v2 - v1) / vrs_sigma))
 
-    # HLTV 使用比例模型；极端情况下避免 0 除。
-    hltv_total = h1 + h2
-    p_hltv = 0.5 if hltv_total == 0 else h1 / hltv_total
+    # HLTV 同样使用 Elo/logistic 公式；缺少 sigma.hltv 时回退到 SIGMA。
+    hltv_sigma = sigma[1] if len(sigma) > 1 else SIGMA
+    if hltv_sigma <= 0:
+        raise ValueError(f"hltv_sigma 必须大于 0，当前值为 {hltv_sigma}")
+    p_hltv = 1 / (1 + 10 ** ((h2 - h1) / hltv_sigma))
 
-    # 加权融合两路胜率。若权重都为 0，则退回五五开。
-    weight_sum = VRS_WEIGHT + HLTV_WEIGHT
-    if weight_sum <= 0:
-        return 0.5
+    # 加权融合两路胜率。若没有传入 TournamentConfig.weights，则兼容旧全局常量。
+    actual_weights = weights if weights is not None else (VRS_WEIGHT, HLTV_WEIGHT)
+    vrs_weight = actual_weights[0] if len(actual_weights) > 0 else VRS_WEIGHT
+    hltv_weight = actual_weights[1] if len(actual_weights) > 1 else HLTV_WEIGHT
+    _validate_weights((vrs_weight, hltv_weight))
+    weight_sum = vrs_weight + hltv_weight
 
-    return (VRS_WEIGHT * p_vrs + HLTV_WEIGHT * p_hltv) / weight_sum
+    raw_probability = (vrs_weight * p_vrs + hltv_weight * p_hltv) / weight_sum
+    return clamp_probability(raw_probability, clamp)
+
+
+def clamp_probability(probability: float, clamp: Tuple[float, float]) -> float:
+    """
+    将胜率限制在指定区间内。
+
+    默认区间 [0.03, 0.97] 是对称的，因此不会破坏 p(a,b) + p(b,a) ≈ 1 的性质。
+    """
+    lower, upper = clamp
+    if lower < 0 or upper > 1 or lower > upper:
+        raise ValueError("概率裁剪区间必须满足 0 <= lower <= upper <= 1")
+    return min(max(probability, lower), upper)
 
 
 def calculate_win_matrix(
     teams: List[Team],
     sigma: Tuple[float, ...] = (SIGMA, SIGMA),
+    weights: Tuple[float, ...] | None = None,
 ) -> Dict[str, Dict[str, float]]:
     """
     计算所有队伍之间的胜率矩阵。
@@ -195,7 +297,12 @@ def calculate_win_matrix(
         win_matrix[team1.name] = {}
         for team2 in teams:
             if team1 != team2:
-                win_matrix[team1.name][team2.name] = win_probability(team1, team2, sigma)
+                win_matrix[team1.name][team2.name] = win_probability(
+                    team1,
+                    team2,
+                    sigma,
+                    weights=weights,
+                )
 
     return win_matrix
 
@@ -237,7 +344,7 @@ def main() -> None:
     try:
         tournament = load_tournament_config(file_path)
         teams = list(tournament.teams)
-        win_matrix = calculate_win_matrix(teams, tournament.sigma)
+        win_matrix = calculate_win_matrix(teams, tournament.sigma, tournament.weights)
         print_win_matrix(win_matrix, teams)
     except FileNotFoundError:
         print(f"错误：找不到文件 {file_path}")

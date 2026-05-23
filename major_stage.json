@@ -13,6 +13,10 @@
     "valve": "lambda x: x",
     "hltv": "lambda x: x"
   },
+  "weights": {
+    "valve": 0.5,
+    "hltv": 0.5
+  },
   "sigma": {
     "valve": 600,
     "hltv": 1600

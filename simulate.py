@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from argparse import ArgumentParser, Namespace
 from dataclasses import dataclass
+import json
 from multiprocessing import Pool
 from os import cpu_count
 from pathlib import Path
@@ -19,8 +20,6 @@ import random
 from time import perf_counter_ns
 
 from config import (
-    HLTV_WEIGHT,
-    VRS_WEIGHT,
     Team,
     TournamentConfig,
     load_tournament_config,
@@ -111,6 +110,18 @@ class SimulationSummary:
         )
 
 
+def bo3_match_probability(p_map: float) -> float:
+    """
+    根据单图胜率计算 BO3（三局两胜）胜率。
+
+    推导结果为：赢前两图，或前两图一胜一负后赢决胜图。
+    化简后是 p_map ** 2 * (3 - 2 * p_map)。
+    """
+    if not 0 <= p_map <= 1:
+        raise ValueError(f"p_map 必须在 [0, 1] 范围内，当前值为 {p_map}")
+    return p_map**2 * (3 - 2 * p_map)
+
+
 @dataclass
 class SwissSystem:
     """
@@ -120,8 +131,10 @@ class SwissSystem:
     """
 
     sigma: tuple[float, ...]
+    weights: tuple[float, ...]
     records: dict[Team, Record]
     remaining: set[Team]
+    rng: random.Random
 
     def seeding(self, team: Team) -> tuple[int, int, int]:
         """
@@ -153,14 +166,10 @@ class SwissSystem:
             or record_b.losses == 2
         )
 
-        # p 是 team_a 的单图胜率；BO3 用三张图独立抽样近似。
-        p = win_probability(team_a, team_b, self.sigma)
-        if is_bo3:
-            first_map = p > random.random()
-            second_map = p > random.random()
-            team_a_win = p > random.random() if first_map != second_map else first_map
-        else:
-            team_a_win = p > random.random()
+        # BO1 直接使用单图胜率；BO3 先折算成三局两胜的比赛胜率。
+        p_map = win_probability(team_a, team_b, self.sigma, weights=self.weights)
+        p_match = bo3_match_probability(p_map) if is_bo3 else p_map
+        team_a_win = p_match > self.rng.random()
 
         if team_a_win:
             record_a.wins += 1
@@ -178,6 +187,61 @@ class SwissSystem:
                 record = self.records[team]
                 if record.wins == 3 or record.losses == 3:
                     self.remaining.discard(team)
+
+    def has_played(self, team_a: Team, team_b: Team) -> bool:
+        """判断两支队伍此前是否已经交手。"""
+        return team_b in self.records[team_a].teams_faced
+
+    def pair_group(self, group: list[Team]) -> list[tuple[Team, Team]]:
+        """
+        为同一战绩组生成配对。
+
+        仍然沿用“上半区 vs 下半区反向”的原始配对偏好；
+        若有重复对阵风险，则在同组内寻找重复次数最少、偏离原始顺序最小的配对。
+        """
+        if len(group) < 2:
+            return []
+
+        first_half = list(group[: len(group) // 2])
+        second_half = list(reversed(group[len(group) // 2 :]))
+        if len(first_half) != len(second_half):
+            # 理论上当前 16 队瑞士轮不会出现奇数组；这里保留兜底，行为接近原 zip。
+            return list(zip(first_half, second_half))
+
+        best_pairs: list[tuple[Team, Team]] | None = None
+        best_score: tuple[int, int] | None = None
+
+        def search(
+            index: int,
+            available: list[Team],
+            pairs: list[tuple[Team, Team]],
+            repeat_count: int,
+            displacement: int,
+        ) -> None:
+            nonlocal best_pairs, best_score
+
+            if index == len(first_half):
+                score = (repeat_count, displacement)
+                if best_score is None or score < best_score:
+                    best_score = score
+                    best_pairs = list(pairs)
+                return
+
+            team_a = first_half[index]
+            for candidate_index, team_b in enumerate(available):
+                next_available = available[:candidate_index] + available[candidate_index + 1 :]
+                pairs.append((team_a, team_b))
+                search(
+                    index + 1,
+                    next_available,
+                    pairs,
+                    repeat_count + int(self.has_played(team_a, team_b)),
+                    displacement + abs(index - second_half.index(team_b)),
+                )
+                pairs.pop()
+
+        search(0, second_half, [], 0, 0)
+        return best_pairs or list(zip(first_half, second_half))
 
     def simulate_round(self) -> None:
         """根据当前战绩分组并模拟一轮对阵。"""
@@ -199,8 +263,7 @@ class SwissSystem:
 
         # 后续轮次每个战绩组内部配对。当前实现沿用原项目的种子/Buchholz排序策略。
         for group in (pos_teams, even_teams, neg_teams):
-            second_half = reversed(group[len(group) // 2 :])
-            for team_a, team_b in zip(group, second_half):
+            for team_a, team_b in self.pair_group(group):
                 self.simulate_match(team_a, team_b)
 
     def simulate_tournament(self) -> None:
@@ -222,12 +285,36 @@ def format_combination_key(
     )
 
 
+def parse_team_names(text: str) -> list[str]:
+    """解析组合文本中的队伍列表，自动忽略空项。"""
+    return [team.strip() for team in text.split(",") if team.strip()]
+
+
+def parse_combination_key(combination: str) -> dict[str, list[str]]:
+    """
+    将旧版文本组合键解析成结构化字段。
+
+    这个函数只解析 format_combination_key 生成的内部格式，用于 JSONL 输出。
+    """
+    if not combination.startswith("3-0: "):
+        raise ValueError(f"无法解析组合键：{combination}")
+
+    three_zero_text, rest = combination.removeprefix("3-0: ").split(" | 3-1/3-2: ", 1)
+    advanced_text, zero_three_text = rest.split(" | 0-3: ", 1)
+    return {
+        "three_zero": parse_team_names(three_zero_text),
+        "advanced": parse_team_names(advanced_text),
+        "zero_three": parse_team_names(zero_three_text),
+    }
+
+
 class Simulation:
     """赛事模拟器，负责加载配置并调度单进程/多进程模拟。"""
 
     def __init__(self, filepath: str | Path) -> None:
         self.tournament = load_tournament_config(filepath)
         self.sigma = self.tournament.sigma
+        self.weights = self.tournament.weights
         self.teams = self.tournament.teams
 
     def batch(self, n: int, seed: int | None = None) -> SimulationSummary:
@@ -236,16 +323,16 @@ class Simulation:
 
         seed 只作用于当前批次；多进程时每个进程会拿到不同 seed。
         """
-        if seed is not None:
-            random.seed(seed)
-
+        rng = random.Random(seed)
         summary = SimulationSummary.new(self.teams)
 
         for _ in range(n):
             swiss = SwissSystem(
                 sigma=self.sigma,
+                weights=self.weights,
                 records={team: Record.new() for team in self.teams},
                 remaining=set(self.teams),
+                rng=rng,
             )
             swiss.simulate_tournament()
 
@@ -316,10 +403,11 @@ def default_output_path(tournament: TournamentConfig) -> Path:
     """
     根据真实参数生成输出文件名。
 
-    文件名包含 VRS 权重、HLTV 权重，以及 JSON 中每个评分系统的 sigma。
+    文件名包含实际权重，以及 JSON 中每个评分系统的 sigma。
     """
+    weight_text = "_".join(f"{value:.4f}" for value in tournament.weights)
     sigma_text = "_".join(f"{value:.4f}" for value in tournament.sigma)
-    return Path(f"{VRS_WEIGHT:.4f}_{HLTV_WEIGHT:.4f}_{sigma_text}.txt")
+    return Path(f"{weight_text}_{sigma_text}.txt")
 
 
 def write_combination_results(
@@ -327,7 +415,11 @@ def write_combination_results(
     n: int,
     output_path: str | Path,
 ) -> Path:
-    """将组合频率按出现次数降序写入结果文件。"""
+    """
+    将组合频率按出现次数降序写入结果文件。
+
+    默认写旧版文本格式；当输出文件扩展名为 .jsonl 时，写结构化 JSON Lines。
+    """
     path = Path(output_path)
     path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -337,9 +429,22 @@ def write_combination_results(
         reverse=True,
     )
 
-    with path.open("w", encoding="utf-8") as file:
-        for combination, count in sorted_combinations:
-            file.write(f"{combination}: {count}/{n} ({count / n * 100:.4f}%)\n")
+    if path.suffix.lower() == ".jsonl":
+        with path.open("w", encoding="utf-8") as file:
+            for combination, count in sorted_combinations:
+                record = parse_combination_key(combination)
+                record.update(
+                    {
+                        "count": count,
+                        "total": n,
+                        "probability": count / n,
+                    }
+                )
+                file.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
+    else:
+        with path.open("w", encoding="utf-8") as file:
+            for combination, count in sorted_combinations:
+                file.write(f"{combination}: {count}/{n} ({count / n * 100:.4f}%)\n")
 
     return path
 

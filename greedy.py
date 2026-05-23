@@ -11,6 +11,7 @@ from __future__ import annotations
 from argparse import ArgumentParser, Namespace
 from collections import defaultdict
 import itertools
+import json
 import re
 from pathlib import Path
 from typing import Dict, List, Tuple
@@ -26,13 +27,36 @@ def parse_team_group(text: str) -> frozenset[str]:
     return frozenset(team.strip() for team in text.split(",") if team.strip())
 
 
+def normalize_team_group(value: object) -> frozenset[str]:
+    """把 JSONL 或文本中的队伍列表规范化为 frozenset。"""
+    if isinstance(value, str):
+        return parse_team_group(value)
+
+    if isinstance(value, list):
+        return frozenset(str(team).strip() for team in value if str(team).strip())
+
+    raise ValueError(f"无法解析队伍列表：{value!r}")
+
+
 def parse_simulation_results(file_path: str | Path) -> tuple[dict, int]:
     """
     解析模拟结果文件。
 
-    文件行格式：
+    支持两种格式：
+    1. 旧版文本行：
     3-0: A, B | 3-1/3-2: C, D ... | 0-3: X, Y: 123/100000 (0.1230%)
+    2. JSON Lines：
+    {"three_zero": [...], "advanced": [...], "zero_three": [...], "count": 123}
     """
+    path = Path(file_path)
+    if path.suffix.lower() == ".jsonl":
+        return parse_simulation_results_jsonl(path)
+
+    return parse_simulation_results_text(path)
+
+
+def parse_simulation_results_text(file_path: str | Path) -> tuple[dict, int]:
+    """解析旧版文本模拟结果文件。"""
     results = defaultdict(int)
     total_simulations = 0
     pattern = re.compile(r"3-0: (.*?) \| 3-1/3-2: (.*?) \| 0-3: (.*?): (\d+)/\d+")
@@ -58,9 +82,42 @@ def parse_simulation_results(file_path: str | Path) -> tuple[dict, int]:
     return dict(results), total_simulations
 
 
+def parse_simulation_results_jsonl(file_path: str | Path) -> tuple[dict, int]:
+    """解析 JSON Lines 结构化模拟结果文件。"""
+    results = defaultdict(int)
+    total_simulations = 0
+
+    with Path(file_path).open("r", encoding="utf-8") as file:
+        for line_number, line in enumerate(file, 1):
+            if not line.strip():
+                continue
+
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"{file_path} 第 {line_number} 行不是有效 JSON") from exc
+
+            three_zero = normalize_team_group(record.get("three_zero", []))
+            three_one_two = normalize_team_group(
+                record.get("advanced", record.get("three_one_two", []))
+            )
+            zero_three = normalize_team_group(record.get("zero_three", []))
+            count = int(record["count"])
+
+            key = (three_zero, three_one_two, zero_three)
+            results[key] += count
+            total_simulations += count
+
+    if total_simulations == 0:
+        raise ValueError(f"结果文件 {file_path} 中没有解析到有效模拟结果")
+
+    return dict(results), total_simulations
+
+
 def calculate_team_probabilities(
     teams: List[Team],
     sigma: Tuple[float, ...],
+    weights: Tuple[float, ...] | None = None,
 ) -> Dict[str, Dict[str, float]]:
     """
     估算每个队伍获得 3-0、3-1/3-2、0-3 的启发式概率。
@@ -78,7 +135,7 @@ def calculate_team_probabilities(
             if other == team:
                 continue
 
-            win_prob = win_probability(team, other, sigma)
+            win_prob = win_probability(team, other, sigma, weights=weights)
             three_zero_prob *= win_prob
             zero_three_prob *= 1 - win_prob
 
@@ -88,6 +145,49 @@ def calculate_team_probabilities(
             "3-1/3-2": advanced_prob,
             "0-3": zero_three_prob,
         }
+
+    return probabilities
+
+
+def calculate_team_probabilities_from_results(
+    teams: List[Team],
+    results: dict,
+) -> Dict[str, Dict[str, float]]:
+    """
+    从模拟结果文件统计每支队伍的边际概率。
+
+    这比基于 pairwise 胜率的快速估算更贴近真实瑞士轮路径；
+    因为它已经包含了配对、BO1/BO3、晋级和淘汰路径的影响。
+    """
+    total_simulations = sum(results.values())
+    if total_simulations <= 0:
+        raise ValueError("模拟结果为空，无法统计队伍边际概率")
+
+    probabilities = {
+        team.name: {
+            "3-0": 0.0,
+            "3-1/3-2": 0.0,
+            "0-3": 0.0,
+        }
+        for team in teams
+    }
+
+    for (three_zero, three_one_two, zero_three), count in results.items():
+        for team_name in three_zero:
+            if team_name in probabilities:
+                probabilities[team_name]["3-0"] += count
+
+        for team_name in three_one_two:
+            if team_name in probabilities:
+                probabilities[team_name]["3-1/3-2"] += count
+
+        for team_name in zero_three:
+            if team_name in probabilities:
+                probabilities[team_name]["0-3"] += count
+
+    for team_stats in probabilities.values():
+        for result_key in team_stats:
+            team_stats[result_key] /= total_simulations
 
     return probabilities
 
@@ -244,6 +344,7 @@ def find_best_candidate(
     teams: List[Team],
     sigma: Tuple[float, ...],
     top_n: int = 5,
+    weights: Tuple[float, ...] | None = None,
 ) -> tuple[dict | None, float, list[tuple[dict, float]], int]:
     """
     寻找候选集内预测正确数 >= 5 概率最高的组合。
@@ -252,7 +353,7 @@ def find_best_candidate(
         tuple: (最佳候选, 最佳概率, 所有候选评估结果, 模拟总次数)
     """
     results, total_simulations = parse_simulation_results(file_path)
-    team_stats = calculate_team_probabilities(teams, sigma)
+    team_stats = calculate_team_probabilities_from_results(teams, results)
     candidates = generate_candidate_combinations(team_stats, results, top_n)
 
     best_combination = None
@@ -279,7 +380,12 @@ def find_optimal_combination(file_path: str | Path, teams: List[Team]) -> tuple:
     """
     # 旧入口不知道 sigma，只能使用配置默认值；保留它是为了不让外部导入直接失效。
     tournament = load_tournament_config("major_stage.json")
-    best, probability, results, _total = find_best_candidate(file_path, teams, tournament.sigma)
+    best, probability, results, _total = find_best_candidate(
+        file_path,
+        teams,
+        tournament.sigma,
+        weights=tournament.weights,
+    )
     return best, probability, results
 
 
@@ -324,6 +430,7 @@ def main() -> None:
         teams,
         tournament.sigma,
         args.candidate_pool,
+        weights=tournament.weights,
     )
 
     print(f"候选组合排名（基于 {total_simulations:,} 次模拟结果）:")
