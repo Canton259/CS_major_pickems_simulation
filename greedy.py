@@ -18,7 +18,7 @@ from typing import Dict, List, Tuple
 from config import Team, load_tournament_config, win_probability
 
 
-DEFAULT_RESULTS_FILE = "0.5000_0.5000_349.2000.txt"
+DEFAULT_RESULTS_FILE = "0.5000_0.5000_600.0000_1600.0000.txt"
 
 
 def parse_team_group(text: str) -> frozenset[str]:
