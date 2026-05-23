@@ -186,9 +186,11 @@ def load_tournament_config(file_path: str | Path) -> TournamentConfig:
 
     teams = []
     for team_id, (team_name, team_data) in enumerate(data["teams"].items()):
+        # rating 必须严格跟 TournamentConfig.systems 保持同序：
+        # rating[0] 是 valve，rating[1] 是 hltv。不能使用 JSON 原始字段顺序。
         rating = tuple(
-            _apply_system_transform(system_name, transform_name, team_data[system_name])
-            for system_name, transform_name in systems_data.items()
+            _apply_system_transform(system_name, systems_data[system_name], team_data[system_name])
+            for system_name in system_names
         )
         teams.append(
             Team(

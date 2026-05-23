@@ -57,6 +57,32 @@ class RandomnessTests(unittest.TestCase):
 
         self.assertEqual(random.getstate(), before)
 
+    def test_fixed_seed_single_worker_is_reproducible(self) -> None:
+        simulation = Simulation("major_stage.json")
+
+        first = simulation.run(20, 1, seed=42)
+        second = simulation.run(20, 1, seed=42)
+
+        self.assertEqual(first.combination_counts, second.combination_counts)
+        self.assertEqual(
+            {
+                team.name: (
+                    result.three_zero,
+                    result.advanced,
+                    result.zero_three,
+                )
+                for team, result in first.team_results.items()
+            },
+            {
+                team.name: (
+                    result.three_zero,
+                    result.advanced,
+                    result.zero_three,
+                )
+                for team, result in second.team_results.items()
+            },
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -11,6 +11,7 @@ CS2 Major Pick'Em 模拟器主程序。
 from __future__ import annotations
 
 from argparse import ArgumentParser, Namespace
+import csv
 from dataclasses import dataclass
 import json
 from multiprocessing import Pool
@@ -449,20 +450,73 @@ def write_combination_results(
     return path
 
 
+def write_team_summary(
+    summary: SimulationSummary,
+    teams: tuple[Team, ...],
+    total: int,
+    output_path: str | Path,
+) -> Path:
+    """按配置文件中的队伍顺序输出队伍单项概率 CSV。"""
+    path = Path(output_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    fieldnames = [
+        "team",
+        "three_zero_count",
+        "advanced_count",
+        "zero_three_count",
+        "three_zero_probability",
+        "advanced_probability",
+        "zero_three_probability",
+        "total",
+    ]
+
+    with path.open("w", encoding="utf-8", newline="") as file:
+        writer = csv.DictWriter(file, fieldnames=fieldnames)
+        writer.writeheader()
+
+        for team in teams:
+            result = summary.team_results[team]
+            writer.writerow(
+                {
+                    "team": team.name,
+                    "three_zero_count": result.three_zero,
+                    "advanced_count": result.advanced,
+                    "zero_three_count": result.zero_three,
+                    "three_zero_probability": result.three_zero / total,
+                    "advanced_probability": result.advanced / total,
+                    "zero_three_probability": result.zero_three / total,
+                    "total": total,
+                }
+            )
+
+    return path
+
+
 def format_results(
     summary: SimulationSummary,
     n: int,
     run_time: float,
     output_path: str | Path,
+    team_summary_path: str | Path | None = None,
+    teams: tuple[Team, ...] | None = None,
 ) -> list[str]:
     """格式化命令行输出，并写入组合统计文件。"""
     path = write_combination_results(summary, n, output_path)
-    return [
+    out = [
         f"已进行 {n:,} 次瑞士轮模拟",
         f"共出现 {len(summary.combination_counts):,} 种 Pick'Em 结果组合",
         f"组合统计已写入: {path}",
         f"运行耗时: {run_time:.4f} 秒",
     ]
+
+    if team_summary_path is not None:
+        if teams is None:
+            raise ValueError("输出队伍汇总 CSV 时必须传入 teams")
+        summary_path = write_team_summary(summary, teams, n, team_summary_path)
+        out.insert(3, f"队伍单项概率已写入: {summary_path}")
+
+    return out
 
 
 def parse_args() -> Namespace:
@@ -500,6 +554,11 @@ def parse_args() -> Namespace:
         default=None,
         help="输出结果文件；默认根据权重和真实 sigma 自动命名",
     )
+    parser.add_argument(
+        "--team-summary",
+        default=None,
+        help="输出队伍单项概率 CSV 的路径",
+    )
     return parser.parse_args()
 
 
@@ -513,7 +572,18 @@ def main() -> None:
     summary = simulation.run(args.iterations, args.workers, args.seed)
     run_time = (perf_counter_ns() - start) / 1_000_000_000
 
-    print("\n".join(format_results(summary, args.iterations, run_time, output_path)))
+    print(
+        "\n".join(
+            format_results(
+                summary,
+                args.iterations,
+                run_time,
+                output_path,
+                team_summary_path=args.team_summary,
+                teams=simulation.teams,
+            )
+        )
+    )
 
 
 if __name__ == "__main__":

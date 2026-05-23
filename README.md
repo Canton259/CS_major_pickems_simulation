@@ -47,6 +47,12 @@ This project is developed based on the following open-source projects:
 ## Installation
 ## 安装说明
 
+Recommended Python version / 推荐 Python 版本: **Python >= 3.10**
+
+The project currently uses only the Python standard library. `requirements.txt` is kept as a note file for compatibility.
+
+当前项目只使用 Python 标准库。`requirements.txt` 保留为兼容说明文件。
+
 ```bash
 pip install -r requirements.txt
 ```
@@ -72,7 +78,10 @@ python simulate.py --input major_stage.json --iterations 100000 --workers 8 --se
    - Default file naming format / 默认文件名格式: `VALVE_WEIGHT_HLTV_WEIGHT_VALVE_SIGMA_HLTV_SIGMA.txt`
    - Example / 示例: `0.5000_0.5000_600.0000_1600.0000.txt`
    - You can override the output path with `--output` / 可以通过 `--output` 指定输出路径
+   - Default output is txt / 默认输出为 txt 文本格式
    - Use a `.jsonl` output path for structured JSON Lines results / 输出路径使用 `.jsonl` 后缀时会生成结构化 JSON Lines 结果
+   - `greedy.py` supports both txt and jsonl result files / `greedy.py` 同时支持 txt 和 jsonl 结果文件
+   - Use `--team-summary` to output per-team probability CSV / 使用 `--team-summary` 输出队伍单项概率 CSV
 
 4. Solve Pick'Em Combinations / 竞猜组合求解:
 ```bash
@@ -81,7 +90,7 @@ python greedy.py --results 0.5000_0.5000_600.0000_1600.0000.txt
 
 5. Run Tests / 运行测试:
 ```bash
-python -m unittest discover -s tests
+python -m unittest discover
 ```
 
 ## Parameters
@@ -98,6 +107,37 @@ python -m unittest discover -s tests
 - `--workers`: Number of worker processes (Default: CPU cores minus one) / 并行进程数（默认: CPU 核心数减一）
 - `--seed`: Random seed for reproducible runs with the same worker count / 随机种子；在相同进程数下可复现实验
 - `--output`: Simulation result output path / 模拟结果输出路径
+- `--team-summary`: Per-team probability CSV output path / 队伍单项概率 CSV 输出路径
+
+## Probability Model
+## 胜率模型
+
+- Valve/VRS uses an Elo/logistic formula / Valve/VRS 使用 Elo/logistic 公式
+- HLTV uses an Elo/logistic formula / HLTV 使用 Elo/logistic 公式
+- `weights` controls how much each rating system contributes / `weights` 控制各评分系统在最终胜率中的权重
+- `sigma` controls how strongly rating differences affect win probability / `sigma` 控制评分差对胜率的影响强度
+- Match probabilities are clamped to avoid overconfidence / 概率会被裁剪，避免模型过度自信
+
+## Output Formats
+## 输出格式
+
+- Combination results default to txt format / 组合结果默认输出 txt 格式
+- If `--output` ends with `.jsonl`, results are written as JSON Lines / 如果 `--output` 以 `.jsonl` 结尾，则输出 JSON Lines
+- `greedy.py` can parse both txt and jsonl result files / `greedy.py` 可解析 txt 和 jsonl 两种结果文件
+- `--team-summary PATH` writes a UTF-8 CSV with per-team 3-0, advanced, and 0-3 counts/probabilities / `--team-summary PATH` 会输出 UTF-8 CSV，包含每队 3-0、晋级、0-3 的次数和概率
+
+Team summary CSV columns / 队伍汇总 CSV 字段:
+
+```text
+team,three_zero_count,advanced_count,zero_three_count,three_zero_probability,advanced_probability,zero_three_probability,total
+```
+
+## Limitations
+## 模型局限性
+
+- The simulator does not fully model map veto / 当前未完整模拟地图 veto
+- It does not fully account for recent form, roster changes, patch/meta updates, travel, or LAN conditions / 当前未完整考虑近期状态、阵容变动、版本更新、旅行和 LAN 状态
+- Monte Carlo results depend heavily on the input win-probability model / 蒙特卡洛结果高度依赖输入胜率模型
 
 ## License
 ## 许可证
