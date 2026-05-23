@@ -1,4 +1,14 @@
 {
+  "metadata": {
+    "event": "IEM Cologne Major 2026 Stage 1",
+    "updated_at": "2026-05-24",
+    "notes": [
+      "参赛队伍参考 HLTV 的 IEM Cologne Major 2026 Stage 1 赛事页。",
+      "seed 用于匹配 HLTV 公布的 Stage 1 首轮对阵顺序。",
+      "valve 使用 HLTV Valve Global Ranking 2026-05-23 points。",
+      "hltv 使用 HLTV World Ranking 2026-05-18 points。"
+    ]
+  },
   "systems": {
     "valve": "lambda x: x",
     "hltv": "lambda x: x"
@@ -8,85 +18,85 @@
     "hltv": 1600
   },
   "teams": {
-    "FURIA": {
+    "GamerLegion": {
       "seed": 1,
-      "valve":2007,
-      "hltv":936
-    },
-    "Vitality": {
-      "seed": 2,
-      "valve":1919,
-      "hltv":934
-    },
-    "Falcons": {
-      "seed": 3,
-      "valve":1935,
-      "hltv":703
-    },
-    "The MongolZ": {
-      "seed": 4,
-      "valve":1763,
-      "hltv":396
-    },
-    "MOUZ": {
-      "seed": 5,
-      "valve":1807,
-      "hltv":537
-    },
-    "Spirit": {
-      "seed": 6,
-      "valve":1715,
-      "hltv":355
-    },
-    "G2": {
-      "seed": 7,
-      "valve":1694,
-      "hltv":286
-    },
-    "paiN": {
-      "seed": 8,
-      "valve":1588,
-      "hltv":219
-    },
-    "Natus Vincere": {
-      "seed": 9,
-      "valve":1745,
-      "hltv":288
-    },
-    "FaZe": {
-      "seed": 10,
-      "valve":1617,
-      "hltv":193
+      "valve": 1742,
+      "hltv": 214
     },
     "B8": {
+      "seed": 2,
+      "valve": 1606,
+      "hltv": 122
+    },
+    "BetBoom": {
+      "seed": 3,
+      "valve": 1575,
+      "hltv": 120
+    },
+    "HEROIC": {
+      "seed": 4,
+      "valve": 1466,
+      "hltv": 69
+    },
+    "BIG": {
+      "seed": 5,
+      "valve": 1423,
+      "hltv": 47
+    },
+    "M80": {
+      "seed": 6,
+      "valve": 1388,
+      "hltv": 66
+    },
+    "MIBR": {
+      "seed": 7,
+      "valve": 1556,
+      "hltv": 52
+    },
+    "SINNERS": {
+      "seed": 8,
+      "valve": 1390,
+      "hltv": 58
+    },
+    "NRG": {
+      "seed": 9,
+      "valve": 1292,
+      "hltv": 41
+    },
+    "TYLOO": {
+      "seed": 10,
+      "valve": 1391,
+      "hltv": 47
+    },
+    "Gaimin Gladiators": {
       "seed": 11,
-      "valve":1655,
-      "hltv":94
+      "valve": 1249,
+      "hltv": 24
     },
-    "Imperial": {
+    "Sharks": {
       "seed": 12,
-      "valve":1401,
-      "hltv":37
-    },
-    "PARIVISION": {
-      "seed": 13,
-      "valve":1591,
-      "hltv":68
+      "valve": 1307,
+      "hltv": 19
     },
     "Liquid": {
+      "seed": 13,
+      "valve": 1325,
+      "hltv": 62
+    },
+    "Lynn Vision": {
       "seed": 14,
-      "valve":1694,
-      "hltv":150
+      "valve": 1436,
+      "hltv": 24
     },
-    "Passion UA": {
+    "THUNDER dOWNUNDER": {
       "seed": 15,
-      "valve":1445,
-      "hltv":80
+      "valve": 1218,
+      "hltv": 12
     },
-    "3DMAX": {
+    "FlyQuest": {
       "seed": 16,
-      "valve":1602,
-      "hltv":181
+      "valve": 1129,
+      "hltv": 17
     }
   }
 }
