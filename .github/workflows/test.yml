@@ -1,0 +1,31 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run unit tests
+        run: python -m unittest discover
+
+      - name: Validate txt output
+        run: |
+          python simulate.py --iterations 100 --workers 1 --seed 42 --output test_result.txt --team-summary test_team_summary.csv
+          python greedy.py --results test_result.txt
+
+      - name: Validate jsonl output
+        run: |
+          python simulate.py --iterations 100 --workers 1 --seed 42 --output test_result.jsonl
+          python greedy.py --results test_result.jsonl

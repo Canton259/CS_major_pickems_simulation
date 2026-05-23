@@ -27,6 +27,7 @@ PROBABILITY_CEILING = 0.97
 
 # 当前胜率模型明确使用前两个评分系统：valve 和 hltv。
 REQUIRED_SYSTEMS = ("valve", "hltv")
+SUPPORTED_TEAM_COUNT = 16
 
 
 @dataclass(frozen=True)
@@ -151,6 +152,39 @@ def _validate_weights(weights: Tuple[float, ...]) -> None:
         raise ValueError("valve 和 hltv 的权重不能同时为 0")
 
 
+def _read_team_seed(team_name: str, team_data: Dict[str, Any]) -> int:
+    """读取并校验队伍 seed，避免配置错误变成难懂的 KeyError。"""
+    if "seed" not in team_data:
+        raise ValueError(f"队伍 {team_name!r} 缺少 seed 字段")
+
+    seed = team_data["seed"]
+    if isinstance(seed, bool) or not isinstance(seed, int):
+        raise ValueError(f"队伍 {team_name!r} 的 seed 必须是整数")
+
+    return seed
+
+
+def _read_team_rating(
+    team_name: str,
+    team_data: Dict[str, Any],
+    system_name: str,
+    transform_name: str,
+) -> float:
+    """按 TournamentConfig.systems 顺序读取评分，并给缺字段配置提供清晰错误。"""
+    if system_name not in team_data:
+        raise ValueError(f"队伍 {team_name!r} 缺少评分字段 {system_name!r}")
+
+    return _apply_system_transform(system_name, transform_name, team_data[system_name])
+
+
+def _validate_supported_team_count(teams: List[Team]) -> None:
+    """当前瑞士轮实现只覆盖 CS Major Pick'Em 的 16 队阶段。"""
+    if len(teams) != SUPPORTED_TEAM_COUNT:
+        raise ValueError(
+            f"当前模拟器只支持 16 队瑞士轮，当前配置包含 {len(teams)} 支队伍"
+        )
+
+
 def load_tournament_config(file_path: str | Path) -> TournamentConfig:
     """
     从 JSON 文件加载完整赛事配置。
@@ -189,17 +223,24 @@ def load_tournament_config(file_path: str | Path) -> TournamentConfig:
         # rating 必须严格跟 TournamentConfig.systems 保持同序：
         # rating[0] 是 valve，rating[1] 是 hltv。不能使用 JSON 原始字段顺序。
         rating = tuple(
-            _apply_system_transform(system_name, systems_data[system_name], team_data[system_name])
+            _read_team_rating(
+                team_name,
+                team_data,
+                system_name,
+                systems_data[system_name],
+            )
             for system_name in system_names
         )
         teams.append(
             Team(
                 id=team_id,
                 name=team_name,
-                seed=int(team_data["seed"]),
+                seed=_read_team_seed(team_name, team_data),
                 rating=rating,
             )
         )
+
+    _validate_supported_team_count(teams)
 
     return TournamentConfig(
         systems=system_names,

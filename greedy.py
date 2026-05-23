@@ -12,6 +12,7 @@ from argparse import ArgumentParser, Namespace
 from collections import defaultdict
 import itertools
 import json
+import random
 import re
 from pathlib import Path
 from typing import Dict, List, Tuple
@@ -33,9 +34,45 @@ def normalize_team_group(value: object) -> frozenset[str]:
         return parse_team_group(value)
 
     if isinstance(value, list):
-        return frozenset(str(team).strip() for team in value if str(team).strip())
+        normalized = []
+        for team in value:
+            if not isinstance(team, str):
+                raise ValueError(f"队伍列表元素必须是字符串：{team!r}")
+            team_name = team.strip()
+            if team_name:
+                normalized.append(team_name)
+        return frozenset(normalized)
 
     raise ValueError(f"无法解析队伍列表：{value!r}")
+
+
+def candidate_key(candidate: dict) -> tuple[frozenset[str], frozenset[str], frozenset[str]]:
+    """生成候选组合去重键，保持 evaluate_candidate 使用的返回结构不变。"""
+    return (
+        frozenset(candidate["3-0"]),
+        frozenset(candidate["3-1/3-2"]),
+        frozenset(candidate["0-3"]),
+    )
+
+
+def validate_jsonl_integer(
+    value: object,
+    field_name: str,
+    file_path: str | Path,
+    line_number: int,
+    *,
+    positive: bool,
+) -> int:
+    """校验 JSONL 中的整数统计字段，并把错误定位到具体文件行号。"""
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{file_path} 第 {line_number} 行字段 {field_name!r} 必须是整数")
+
+    if positive and value <= 0:
+        raise ValueError(f"{file_path} 第 {line_number} 行字段 {field_name!r} 必须是正整数")
+    if not positive and value < 0:
+        raise ValueError(f"{file_path} 第 {line_number} 行字段 {field_name!r} 必须是非负整数")
+
+    return value
 
 
 def parse_simulation_results(file_path: str | Path) -> tuple[dict, int]:
@@ -86,6 +123,7 @@ def parse_simulation_results_jsonl(file_path: str | Path) -> tuple[dict, int]:
     """解析 JSON Lines 结构化模拟结果文件。"""
     results = defaultdict(int)
     total_simulations = 0
+    required_fields = ("three_zero", "advanced", "zero_three", "count")
 
     with Path(file_path).open("r", encoding="utf-8") as file:
         for line_number, line in enumerate(file, 1):
@@ -97,12 +135,37 @@ def parse_simulation_results_jsonl(file_path: str | Path) -> tuple[dict, int]:
             except json.JSONDecodeError as exc:
                 raise ValueError(f"{file_path} 第 {line_number} 行不是有效 JSON") from exc
 
-            three_zero = normalize_team_group(record.get("three_zero", []))
-            three_one_two = normalize_team_group(
-                record.get("advanced", record.get("three_one_two", []))
+            if not isinstance(record, dict):
+                raise ValueError(f"{file_path} 第 {line_number} 行必须是 JSON 对象")
+
+            for field_name in required_fields:
+                if field_name not in record:
+                    raise ValueError(
+                        f"{file_path} 第 {line_number} 行缺少字段 {field_name!r}"
+                    )
+
+            try:
+                three_zero = normalize_team_group(record["three_zero"])
+                three_one_two = normalize_team_group(record["advanced"])
+                zero_three = normalize_team_group(record["zero_three"])
+            except ValueError as exc:
+                raise ValueError(f"{file_path} 第 {line_number} 行：{exc}") from exc
+
+            count = validate_jsonl_integer(
+                record["count"],
+                "count",
+                file_path,
+                line_number,
+                positive=False,
             )
-            zero_three = normalize_team_group(record.get("zero_three", []))
-            count = int(record["count"])
+            if "total" in record:
+                validate_jsonl_integer(
+                    record["total"],
+                    "total",
+                    file_path,
+                    line_number,
+                    positive=True,
+                )
 
             key = (three_zero, three_one_two, zero_three)
             results[key] += count
@@ -298,17 +361,50 @@ def generate_candidate_combinations(
     unique_candidates = []
     seen = set()
     for candidate in candidates:
-        key = (
-            frozenset(candidate["3-0"]),
-            frozenset(candidate["3-1/3-2"]),
-            frozenset(candidate["0-3"]),
-        )
+        key = candidate_key(candidate)
         if key in seen:
             continue
         seen.add(key)
         unique_candidates.append(candidate)
 
     return unique_candidates
+
+
+def generate_random_candidate_combinations(
+    teams: List[Team],
+    candidate_count: int,
+    seed: int | None = None,
+) -> list[dict[str, set[str]]]:
+    """随机生成合法 Pick'Em 组合，作为启发式候选集之外的补充探索。"""
+    if candidate_count <= 0:
+        raise ValueError("--random-candidates 必须大于 0")
+
+    team_names = [team.name for team in teams]
+    if len(team_names) < 10:
+        raise ValueError("随机模式至少需要 10 支队伍才能生成合法 Pick'Em 组合")
+
+    rng = random.Random(seed)
+    candidates = []
+    seen = set()
+    attempts = 0
+    max_attempts = max(candidate_count * 10, candidate_count + 1000)
+
+    while len(candidates) < candidate_count and attempts < max_attempts:
+        attempts += 1
+        shuffled = team_names[:]
+        rng.shuffle(shuffled)
+        candidate = {
+            "3-0": set(shuffled[:2]),
+            "3-1/3-2": set(shuffled[2:8]),
+            "0-3": set(shuffled[8:10]),
+        }
+        key = candidate_key(candidate)
+        if key in seen:
+            continue
+        seen.add(key)
+        candidates.append(candidate)
+
+    return candidates
 
 
 def evaluate_candidate(candidate: dict, results: dict) -> float:
@@ -345,6 +441,9 @@ def find_best_candidate(
     sigma: Tuple[float, ...],
     top_n: int = 5,
     weights: Tuple[float, ...] | None = None,
+    search_mode: str = "heuristic",
+    random_candidates: int = 10_000,
+    seed: int | None = None,
 ) -> tuple[dict | None, float, list[tuple[dict, float]], int]:
     """
     寻找候选集内预测正确数 >= 5 概率最高的组合。
@@ -353,8 +452,15 @@ def find_best_candidate(
         tuple: (最佳候选, 最佳概率, 所有候选评估结果, 模拟总次数)
     """
     results, total_simulations = parse_simulation_results(file_path)
-    team_stats = calculate_team_probabilities_from_results(teams, results)
-    candidates = generate_candidate_combinations(team_stats, results, top_n)
+    if search_mode == "heuristic":
+        team_stats = calculate_team_probabilities_from_results(teams, results)
+        candidates = generate_candidate_combinations(team_stats, results, top_n)
+    elif search_mode == "random":
+        candidates = generate_random_candidate_combinations(teams, random_candidates, seed)
+    elif search_mode == "exhaustive":
+        raise ValueError("exhaustive 搜索模式暂未实现")
+    else:
+        raise ValueError(f"未知 search mode：{search_mode}")
 
     best_combination = None
     best_probability = -1.0
@@ -411,6 +517,24 @@ def parse_args() -> Namespace:
         help="生成候选时每个分区参考的高概率队伍数量，默认 5",
     )
     parser.add_argument(
+        "--search-mode",
+        choices=("heuristic", "random", "exhaustive"),
+        default="heuristic",
+        help="候选搜索模式：heuristic 使用当前启发式候选集，random 随机生成合法组合",
+    )
+    parser.add_argument(
+        "--random-candidates",
+        type=int,
+        default=10_000,
+        help="random 模式生成的随机候选组合数量，默认 10000",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="random 搜索模式的随机种子",
+    )
+    parser.add_argument(
         "--top",
         type=int,
         default=10,
@@ -431,6 +555,9 @@ def main() -> None:
         tournament.sigma,
         args.candidate_pool,
         weights=tournament.weights,
+        search_mode=args.search_mode,
+        random_candidates=args.random_candidates,
+        seed=args.seed,
     )
 
     print(f"候选组合排名（基于 {total_simulations:,} 次模拟结果）:")

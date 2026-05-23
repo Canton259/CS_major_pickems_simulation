@@ -464,9 +464,11 @@ def write_team_summary(
         "team",
         "three_zero_count",
         "advanced_count",
+        "qualified_count",
         "zero_three_count",
         "three_zero_probability",
         "advanced_probability",
+        "qualified_probability",
         "zero_three_probability",
         "total",
     ]
@@ -477,14 +479,17 @@ def write_team_summary(
 
         for team in teams:
             result = summary.team_results[team]
+            qualified_count = result.three_zero + result.advanced
             writer.writerow(
                 {
                     "team": team.name,
                     "three_zero_count": result.three_zero,
                     "advanced_count": result.advanced,
+                    "qualified_count": qualified_count,
                     "zero_three_count": result.zero_three,
                     "three_zero_probability": result.three_zero / total,
                     "advanced_probability": result.advanced / total,
+                    "qualified_probability": qualified_count / total,
                     "zero_three_probability": result.zero_three / total,
                     "total": total,
                 }

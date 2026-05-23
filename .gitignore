@@ -22,5 +22,9 @@ Thumbs.db
 !README.md
 !LICENSE
 
+# 本地 smoke test 输出
+test_result.jsonl
+test_team_summary.csv
+
 # 日志文件
 *.log 

@@ -26,6 +26,7 @@ This project is developed based on the following open-source projects:
 
 - Greedy Algorithm / 贪心算法
   - Best candidate Pick'Em combination search / 候选集内最佳竞猜组合搜索
+  - Heuristic and random search modes / 支持启发式和随机搜索模式
   - Probability-based team selection / 基于概率的队伍选择
   - Top 10 combinations ranking / Top 10 组合排名
 
@@ -33,6 +34,7 @@ This project is developed based on the following open-source projects:
   - Buchholz system implementation / Buchholz系统实现
   - Seeding-based matchmaking / 基于种子的对阵
   - Round-by-round progression / 逐轮晋级机制
+  - Currently supports 16-team Swiss stages / 当前支持 16 队瑞士轮阶段
 
 - Multi-process Computing / 多进程计算
   - Parallel simulation execution / 并行模拟执行
@@ -88,10 +90,25 @@ python simulate.py --input major_stage.json --iterations 100000 --workers 8 --se
 python greedy.py --results 0.5000_0.5000_600.0000_1600.0000.txt
 ```
 
+Heuristic search is the default. Random search can be used as an additional exploration mode.
+
+启发式搜索是默认模式。随机搜索可作为补充探索模式使用。
+
+```bash
+python greedy.py --results result.txt --search-mode heuristic
+python greedy.py --results result.txt --search-mode random --random-candidates 10000 --seed 42
+```
+
 5. Run Tests / 运行测试:
 ```bash
 python -m unittest discover
 ```
+
+GitHub Actions runs the unit tests and smoke checks for txt/jsonl simulation outputs on every push and pull request.
+
+GitHub Actions 会在每次 push 和 pull request 时运行单元测试，并检查 txt/jsonl 模拟输出流程。
+
+The workflow is defined in `.github/workflows/test.yml` / 工作流定义在 `.github/workflows/test.yml`。
 
 ## Parameters
 ## 参数说明
@@ -103,11 +120,15 @@ python -m unittest discover
 - `sigma.valve`: Valve Elo sigma in `major_stage.json` (Current default: 600) / `major_stage.json` 中的 Valve Elo 标准差参数（当前默认: 600）
 - `sigma.hltv`: HLTV Elo sigma in `major_stage.json` (Current default: 1600) / `major_stage.json` 中的 HLTV Elo 标准差参数（当前默认: 1600）
 - `SIGMA`: Compatibility fallback in `config.py` (Default: 349.2). Normal simulations use `major_stage.json` first. / `config.py` 中的兼容回退值（默认: 349.2）。正常模拟优先使用 `major_stage.json`。
+- Team count: the current simulator only supports 16-team Swiss stages / 队伍数量：当前模拟器只支持 16 队瑞士轮
 - `--iterations`: Number of Monte Carlo simulations (Default: 100000) / 蒙特卡洛模拟次数（默认: 100000）
 - `--workers`: Number of worker processes (Default: CPU cores minus one) / 并行进程数（默认: CPU 核心数减一）
 - `--seed`: Random seed for reproducible runs with the same worker count / 随机种子；在相同进程数下可复现实验
 - `--output`: Simulation result output path / 模拟结果输出路径
 - `--team-summary`: Per-team probability CSV output path / 队伍单项概率 CSV 输出路径
+- `greedy.py --search-mode`: Candidate search mode. `heuristic` is default; `random` generates legal random Pick'Em combinations / 候选搜索模式。`heuristic` 为默认；`random` 会生成合法随机竞猜组合
+- `greedy.py --random-candidates`: Number of random candidates generated in random mode (Default: 10000) / random 模式生成的随机候选数量（默认: 10000）
+- `greedy.py --seed`: Random seed for greedy random search / greedy 随机搜索模式的随机种子
 
 ## Probability Model
 ## 胜率模型
@@ -124,17 +145,18 @@ python -m unittest discover
 - Combination results default to txt format / 组合结果默认输出 txt 格式
 - If `--output` ends with `.jsonl`, results are written as JSON Lines / 如果 `--output` 以 `.jsonl` 结尾，则输出 JSON Lines
 - `greedy.py` can parse both txt and jsonl result files / `greedy.py` 可解析 txt 和 jsonl 两种结果文件
-- `--team-summary PATH` writes a UTF-8 CSV with per-team 3-0, advanced, and 0-3 counts/probabilities / `--team-summary PATH` 会输出 UTF-8 CSV，包含每队 3-0、晋级、0-3 的次数和概率
+- `--team-summary PATH` writes a UTF-8 CSV with per-team 3-0, advanced, qualified, and 0-3 counts/probabilities / `--team-summary PATH` 会输出 UTF-8 CSV，包含每队 3-0、晋级、总晋级、0-3 的次数和概率
 
 Team summary CSV columns / 队伍汇总 CSV 字段:
 
 ```text
-team,three_zero_count,advanced_count,zero_three_count,three_zero_probability,advanced_probability,zero_three_probability,total
+team,three_zero_count,advanced_count,qualified_count,zero_three_count,three_zero_probability,advanced_probability,qualified_probability,zero_three_probability,total
 ```
 
 ## Limitations
 ## 模型局限性
 
+- The current simulator only supports 16-team Swiss stages / 当前模拟器只支持 16 队瑞士轮阶段
 - The simulator does not fully model map veto / 当前未完整模拟地图 veto
 - It does not fully account for recent form, roster changes, patch/meta updates, travel, or LAN conditions / 当前未完整考虑近期状态、阵容变动、版本更新、旅行和 LAN 状态
 - Monte Carlo results depend heavily on the input win-probability model / 蒙特卡洛结果高度依赖输入胜率模型
