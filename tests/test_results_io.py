@@ -62,6 +62,77 @@ class ResultsIoTests(unittest.TestCase):
                 self.assertEqual(completed.returncode, 0, completed.stderr)
                 self.assertIn("候选组合排名", completed.stdout)
 
+    def test_simulate_cli_outputs_remain_greedy_compatible(self) -> None:
+        project_root = Path(__file__).resolve().parents[1]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            text_path = temp_path / "test_result.txt"
+            jsonl_path = temp_path / "test_result.jsonl"
+            team_summary_path = temp_path / "test_team_summary.csv"
+
+            text_run = subprocess.run(
+                [
+                    sys.executable,
+                    "simulate.py",
+                    "--iterations",
+                    "100",
+                    "--workers",
+                    "1",
+                    "--seed",
+                    "42",
+                    "--output",
+                    str(text_path),
+                    "--team-summary",
+                    str(team_summary_path),
+                ],
+                cwd=project_root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(text_run.returncode, 0, text_run.stderr)
+            self.assertTrue(text_path.exists())
+            self.assertTrue(team_summary_path.exists())
+
+            jsonl_run = subprocess.run(
+                [
+                    sys.executable,
+                    "simulate.py",
+                    "--iterations",
+                    "100",
+                    "--workers",
+                    "1",
+                    "--seed",
+                    "42",
+                    "--output",
+                    str(jsonl_path),
+                ],
+                cwd=project_root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(jsonl_run.returncode, 0, jsonl_run.stderr)
+            self.assertTrue(jsonl_path.exists())
+
+            for result_path in (text_path, jsonl_path):
+                greedy_run = subprocess.run(
+                    [
+                        sys.executable,
+                        "greedy.py",
+                        "--results",
+                        str(result_path),
+                        "--top",
+                        "1",
+                    ],
+                    cwd=project_root,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertEqual(greedy_run.returncode, 0, greedy_run.stderr)
+
     def test_jsonl_output_contains_structured_records(self) -> None:
         simulation = Simulation("major_stage.json")
         summary = simulation.run(1, 1, seed=42)

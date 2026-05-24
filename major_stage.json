@@ -6,17 +6,24 @@
       "参赛队伍参考 HLTV 的 IEM Cologne Major 2026 Stage 1 赛事页。",
       "seed 用于匹配 HLTV 公布的 Stage 1 首轮对阵顺序。",
       "valve 使用 HLTV Valve Global Ranking 2026-05-23 points。",
-      "hltv 使用 HLTV World Ranking 2026-05-18 points。"
+      "hltv 使用 HLTV World Ranking 2026-05-18 points。",
+      "maps uses HLTV team map stats Win rate: CS2, 2025-11-24 to 2026-05-24, current map_pool only.",
+      "maps values without an HLTV sample in that 6-month window are set to 0 by user request."
     ]
   },
   "systems": {
     "valve": "lambda x: x",
     "hltv": "lambda x: x"
   },
-  "weights": {
-    "valve": 0.5,
-    "hltv": 0.5
-  },
+  "map_pool": [
+    "Dust2",
+    "Mirage",
+    "Inferno",
+    "Nuke",
+    "Overpass",
+    "Ancient",
+    "Anubis"
+  ],
   "sigma": {
     "valve": 600,
     "hltv": 1600
@@ -25,82 +32,226 @@
     "GamerLegion": {
       "seed": 1,
       "valve": 1742,
-      "hltv": 214
+      "hltv": 214,
+      "maps": {
+        "Dust2": 0.0,
+        "Mirage": 0.609,
+        "Inferno": 0.682,
+        "Nuke": 0.625,
+        "Overpass": 0.5,
+        "Ancient": 0.692,
+        "Anubis": 0.25
+      }
     },
     "B8": {
       "seed": 2,
       "valve": 1606,
-      "hltv": 122
+      "hltv": 122,
+      "maps": {
+        "Dust2": 0.556,
+        "Mirage": 0.586,
+        "Inferno": 0.308,
+        "Nuke": 0.3,
+        "Overpass": 0.333,
+        "Ancient": 0.68,
+        "Anubis": 0.0
+      }
     },
     "BetBoom": {
       "seed": 3,
       "valve": 1575,
-      "hltv": 120
+      "hltv": 120,
+      "maps": {
+        "Dust2": 0.792,
+        "Mirage": 0.633,
+        "Inferno": 0.0,
+        "Nuke": 0.577,
+        "Overpass": 0.526,
+        "Ancient": 0.609,
+        "Anubis": 0.615
+      }
     },
     "HEROIC": {
       "seed": 4,
       "valve": 1466,
-      "hltv": 69
+      "hltv": 69,
+      "maps": {
+        "Dust2": 0.579,
+        "Mirage": 0.5,
+        "Inferno": 0.429,
+        "Nuke": 0.65,
+        "Overpass": 0.375,
+        "Ancient": 0.444,
+        "Anubis": 0.0
+      }
     },
     "BIG": {
       "seed": 5,
       "valve": 1423,
-      "hltv": 47
+      "hltv": 47,
+      "maps": {
+        "Dust2": 0.667,
+        "Mirage": 0.611,
+        "Inferno": 0.875,
+        "Nuke": 0.7,
+        "Overpass": 0.704,
+        "Ancient": 0.654,
+        "Anubis": 0.625
+      }
     },
     "M80": {
       "seed": 6,
       "valve": 1388,
-      "hltv": 66
+      "hltv": 66,
+      "maps": {
+        "Dust2": 0.65,
+        "Mirage": 0.677,
+        "Inferno": 0.545,
+        "Nuke": 0.0,
+        "Overpass": 0.571,
+        "Ancient": 0.5,
+        "Anubis": 0.5
+      }
     },
     "MIBR": {
       "seed": 7,
       "valve": 1556,
-      "hltv": 52
+      "hltv": 52,
+      "maps": {
+        "Dust2": 0.0,
+        "Mirage": 0.619,
+        "Inferno": 0.692,
+        "Nuke": 0.556,
+        "Overpass": 0.455,
+        "Ancient": 0.765,
+        "Anubis": 0.9
+      }
     },
     "SINNERS": {
       "seed": 8,
       "valve": 1390,
-      "hltv": 58
+      "hltv": 58,
+      "maps": {
+        "Dust2": 0.545,
+        "Mirage": 0.64,
+        "Inferno": 0.5,
+        "Nuke": 0.474,
+        "Overpass": 0.8,
+        "Ancient": 0.667,
+        "Anubis": 0.0
+      }
     },
     "NRG": {
       "seed": 9,
       "valve": 1292,
-      "hltv": 41
+      "hltv": 41,
+      "maps": {
+        "Dust2": 0.333,
+        "Mirage": 0.7,
+        "Inferno": 0.533,
+        "Nuke": 0.167,
+        "Overpass": 0.333,
+        "Ancient": 0.583,
+        "Anubis": 0.0
+      }
     },
     "TYLOO": {
       "seed": 10,
       "valve": 1391,
-      "hltv": 47
+      "hltv": 47,
+      "maps": {
+        "Dust2": 0.0,
+        "Mirage": 0.857,
+        "Inferno": 0.667,
+        "Nuke": 0.769,
+        "Overpass": 0.7,
+        "Ancient": 0.474,
+        "Anubis": 0.5
+      }
     },
     "Gaimin Gladiators": {
       "seed": 11,
       "valve": 1249,
-      "hltv": 24
+      "hltv": 24,
+      "maps": {
+        "Dust2": 0.55,
+        "Mirage": 0.0,
+        "Inferno": 0.333,
+        "Nuke": 0.375,
+        "Overpass": 0.6,
+        "Ancient": 0.667,
+        "Anubis": 0.0
+      }
     },
     "Sharks": {
       "seed": 12,
       "valve": 1307,
-      "hltv": 19
+      "hltv": 19,
+      "maps": {
+        "Dust2": 1.0,
+        "Mirage": 0.625,
+        "Inferno": 0.56,
+        "Nuke": 0.719,
+        "Overpass": 0.438,
+        "Ancient": 0.5,
+        "Anubis": 0.857
+      }
     },
     "Liquid": {
       "seed": 13,
       "valve": 1325,
-      "hltv": 62
+      "hltv": 62,
+      "maps": {
+        "Dust2": 0.286,
+        "Mirage": 0.529,
+        "Inferno": 0.533,
+        "Nuke": 0.389,
+        "Overpass": 0.0,
+        "Ancient": 0.294,
+        "Anubis": 0.333
+      }
     },
     "Lynn Vision": {
       "seed": 14,
       "valve": 1436,
-      "hltv": 24
+      "hltv": 24,
+      "maps": {
+        "Dust2": 0.76,
+        "Mirage": 0.0,
+        "Inferno": 0.778,
+        "Nuke": 0.636,
+        "Overpass": 0.5,
+        "Ancient": 0.588,
+        "Anubis": 0.6
+      }
     },
     "THUNDER dOWNUNDER": {
       "seed": 15,
       "valve": 1218,
-      "hltv": 12
+      "hltv": 12,
+      "maps": {
+        "Dust2": 0.733,
+        "Mirage": 0.75,
+        "Inferno": 0.76,
+        "Nuke": 0.846,
+        "Overpass": 0.625,
+        "Ancient": 0.545,
+        "Anubis": 0.824
+      }
     },
     "FlyQuest": {
       "seed": 16,
       "valve": 1129,
-      "hltv": 17
+      "hltv": 17,
+      "maps": {
+        "Dust2": 0.769,
+        "Mirage": 0.571,
+        "Inferno": 0.6,
+        "Nuke": 0.333,
+        "Overpass": 0.333,
+        "Ancient": 0.667,
+        "Anubis": 0.917
+      }
     }
   }
 }

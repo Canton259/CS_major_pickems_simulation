@@ -5,3 +5,5 @@
 # 说明：
 # - argparse、csv、json、multiprocessing、pathlib、random、unittest 等均为标准库。
 # - 如果后续引入第三方库，再在此文件中补充对应依赖。
+numpy>=1.24
+numba>=0.57

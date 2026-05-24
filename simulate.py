@@ -24,8 +24,8 @@ from config import (
     Team,
     TournamentConfig,
     load_tournament_config,
-    win_probability,
 )
+from maps import DEFAULT_MAP_POOL, simulate_bo1_with_veto, simulate_bo3_with_veto
 
 
 VALVE_ROUND_FOUR_FIVE_PAIRING_PRIORITY: tuple[tuple[tuple[int, int], ...], ...] = (
@@ -155,6 +155,7 @@ class SwissSystem:
     records: dict[Team, Record]
     remaining: set[Team]
     rng: random.Random
+    map_pool: tuple[str, ...] = DEFAULT_MAP_POOL
 
     def seeding(self, team: Team) -> tuple[int, int, int]:
         """
@@ -186,10 +187,24 @@ class SwissSystem:
             or record_b.losses == 2
         )
 
-        # BO1 直接使用单图胜率；BO3 先折算成三局两胜的比赛胜率。
-        p_map = win_probability(team_a, team_b, self.sigma, weights=self.weights)
-        p_match = bo3_match_probability(p_map) if is_bo3 else p_map
-        team_a_win = p_match > self.rng.random()
+        if is_bo3:
+            team_a_win = simulate_bo3_with_veto(
+                team_a,
+                team_b,
+                self.map_pool,
+                self.sigma,
+                self.weights,
+                self.rng,
+            )
+        else:
+            team_a_win = simulate_bo1_with_veto(
+                team_a,
+                team_b,
+                self.map_pool,
+                self.sigma,
+                self.weights,
+                self.rng,
+            )
 
         if team_a_win:
             record_a.wins += 1
@@ -366,6 +381,7 @@ class Simulation:
         self.tournament = load_tournament_config(filepath)
         self.sigma = self.tournament.sigma
         self.weights = self.tournament.weights
+        self.map_pool = self.tournament.map_pool
         self.teams = self.tournament.teams
 
     def batch(self, n: int, seed: int | None = None) -> SimulationSummary:
@@ -384,6 +400,7 @@ class Simulation:
                 records={team: Record.new() for team in self.teams},
                 remaining=set(self.teams),
                 rng=rng,
+                map_pool=self.map_pool,
             )
             swiss.simulate_tournament()
 
@@ -587,8 +604,8 @@ def parse_args() -> Namespace:
         "-n",
         "--iterations",
         type=int,
-        default=100_000,
-        help="模拟次数，默认 100000；如需大样本可传 10000000",
+        default=1_000_000,
+        help="模拟次数，默认 1000000；如需大样本可传 10000000",
     )
     parser.add_argument(
         "-w",

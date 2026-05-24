@@ -3,6 +3,7 @@ from pathlib import Path
 import random
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from config import Team
 from simulate import Record, Simulation, SwissSystem, bo3_match_probability, write_team_summary
@@ -148,6 +149,20 @@ class ValvePairingTests(unittest.TestCase):
 
 
 class SimulationTests(unittest.TestCase):
+    def test_bo3_simulation_uses_veto_not_bo3_probability_formula(self) -> None:
+        teams = make_test_teams(2)
+        swiss = make_swiss(teams)
+        swiss.records[teams[0]].wins = 2
+        swiss.records[teams[1]].wins = 2
+
+        with patch("simulate.bo3_match_probability", side_effect=AssertionError("unused")):
+            with patch("simulate.simulate_bo3_with_veto", return_value=True) as veto_simulator:
+                swiss.simulate_match(teams[0], teams[1])
+
+        veto_simulator.assert_called_once()
+        self.assertEqual(swiss.records[teams[0]].wins, 3)
+        self.assertEqual(swiss.records[teams[1]].losses, 1)
+
     def test_fixed_seed_single_worker_is_reproducible(self) -> None:
         simulation = Simulation("major_stage.json")
 

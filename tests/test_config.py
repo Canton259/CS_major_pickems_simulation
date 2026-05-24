@@ -3,7 +3,8 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from config import Team, load_tournament_config, win_probability
+from config import HLTV_WEIGHT, Team, VRS_WEIGHT, load_tournament_config, win_probability
+from maps import DEFAULT_MAP_POOL
 
 
 def make_config() -> dict:
@@ -23,10 +24,6 @@ def make_config() -> dict:
         "sigma": {
             "hltv": 1600,
             "valve": 600,
-        },
-        "weights": {
-            "hltv": 0.5,
-            "valve": 0.5,
         },
         "teams": teams,
     }
@@ -49,8 +46,46 @@ class ConfigLoadingTests(unittest.TestCase):
 
         self.assertEqual(tournament.systems[:2], ("valve", "hltv"))
         self.assertEqual(tournament.sigma[:2], (600.0, 1600.0))
-        self.assertEqual(tournament.weights[:2], (0.5, 0.5))
         self.assertEqual(tournament.teams[0].rating[:2], (456.0, 123.0))
+
+    def test_missing_weights_fall_back_to_config_defaults(self) -> None:
+        tournament = load_from_temp(make_config())
+
+        self.assertEqual(tournament.weights[:2], (VRS_WEIGHT, HLTV_WEIGHT))
+
+    def test_missing_map_pool_uses_default_pool(self) -> None:
+        tournament = load_from_temp(make_config())
+
+        self.assertEqual(tournament.map_pool, DEFAULT_MAP_POOL)
+
+    def test_missing_team_maps_default_to_neutral_strengths(self) -> None:
+        tournament = load_from_temp(make_config())
+
+        self.assertEqual(tournament.teams[0].map_strengths, {map_name: 0.5 for map_name in DEFAULT_MAP_POOL})
+
+    def test_missing_single_map_strength_defaults_to_neutral(self) -> None:
+        config_data = make_config()
+        config_data["map_pool"] = ["Dust2", "Mirage", "Inferno"]
+        config_data["teams"]["Team1"]["maps"] = {
+            "Dust2": 0.61,
+            "Mirage": 0.43,
+        }
+
+        tournament = load_from_temp(config_data)
+
+        self.assertEqual(tournament.map_pool, ("Dust2", "Mirage", "Inferno"))
+        self.assertEqual(tournament.teams[0].map_strengths["Dust2"], 0.61)
+        self.assertEqual(tournament.teams[0].map_strengths["Mirage"], 0.43)
+        self.assertEqual(tournament.teams[0].map_strengths["Inferno"], 0.5)
+
+    def test_invalid_map_strength_raises_clear_error(self) -> None:
+        for value in (-0.01, 1.01):
+            with self.subTest(value=value):
+                config_data = make_config()
+                config_data["teams"]["Team1"]["maps"] = {"Mirage": value}
+
+                with self.assertRaisesRegex(ValueError, "Team1.*Mirage.*\\[0, 1\\]"):
+                    load_from_temp(config_data)
 
     def test_weights_cannot_both_be_zero(self) -> None:
         config_data = make_config()

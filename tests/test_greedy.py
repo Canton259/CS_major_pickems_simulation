@@ -3,7 +3,12 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from greedy import evaluate_candidate, parse_simulation_results
+from greedy import (
+    evaluate_candidate,
+    evaluate_candidate_by_inclusion_exclusion,
+    parse_simulation_results,
+    validate_candidate,
+)
 
 
 TEXT_RESULTS = (
@@ -120,6 +125,40 @@ class CandidateEvaluationTests(unittest.TestCase):
         }
 
         self.assertEqual(evaluate_candidate(candidate, results), 3 / 5)
+
+    def test_inclusion_exclusion_score_matches_reference_evaluator(self) -> None:
+        candidate = {
+            "3-0": {"A", "B"},
+            "3-1/3-2": {"C", "D", "E", "F", "G", "H"},
+            "0-3": {"I", "J"},
+        }
+        results = {
+            (
+                frozenset({"A", "B"}),
+                frozenset({"C", "D", "E", "F", "G", "H"}),
+                frozenset({"I", "J"}),
+            ): 3,
+            (
+                frozenset({"A", "C"}),
+                frozenset({"B", "D", "E", "F", "G", "H"}),
+                frozenset({"I", "J"}),
+            ): 2,
+        }
+
+        self.assertEqual(
+            evaluate_candidate_by_inclusion_exclusion(candidate, results),
+            evaluate_candidate(candidate, results),
+        )
+
+    def test_invalid_candidate_groups_are_rejected(self) -> None:
+        invalid_candidate = {
+            "3-0": {"A", "B"},
+            "3-1/3-2": {"B", "C", "D", "E", "F", "G"},
+            "0-3": {"I", "J"},
+        }
+
+        with self.assertRaisesRegex(ValueError, "不能重叠"):
+            validate_candidate(invalid_candidate)
 
 
 if __name__ == "__main__":

@@ -7,7 +7,7 @@ CS2 Major Pick'Em 模拟器配置文件。
 3. 计算任意两支队伍之间的单图胜率。
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 import json
 from pathlib import Path
@@ -28,6 +28,15 @@ PROBABILITY_CEILING = 0.97
 # 当前胜率模型明确使用前两个评分系统：valve 和 hltv。
 REQUIRED_SYSTEMS = ("valve", "hltv")
 SUPPORTED_TEAM_COUNT = 16
+DEFAULT_MAP_POOL = (
+    "Dust2",
+    "Mirage",
+    "Inferno",
+    "Nuke",
+    "Overpass",
+    "Ancient",
+    "Anubis",
+)
 
 
 @dataclass(frozen=True)
@@ -46,6 +55,7 @@ class Team:
     name: str
     seed: int
     rating: Tuple[float, ...]
+    map_strengths: Dict[str, float] = field(default_factory=dict)
 
     def __str__(self) -> str:
         return self.name
@@ -69,6 +79,7 @@ class TournamentConfig:
     systems: Tuple[str, ...]
     sigma: Tuple[float, ...]
     weights: Tuple[float, ...]
+    map_pool: Tuple[str, ...]
     teams: Tuple[Team, ...]
 
 
@@ -177,6 +188,66 @@ def _read_team_rating(
     return _apply_system_transform(system_name, transform_name, team_data[system_name])
 
 
+def _read_map_pool(data: Dict[str, Any]) -> Tuple[str, ...]:
+    """Read the configured map pool, falling back to the current CS2 default pool."""
+    raw_map_pool = data.get("map_pool", DEFAULT_MAP_POOL)
+    if not isinstance(raw_map_pool, (list, tuple)):
+        raise ValueError("map_pool must be a list of map names")
+
+    map_pool = tuple(raw_map_pool)
+    if not map_pool:
+        raise ValueError("map_pool must contain at least one map")
+
+    seen_maps = set()
+    for map_name in map_pool:
+        if not isinstance(map_name, str) or not map_name.strip():
+            raise ValueError(f"map_pool contains an invalid map name: {map_name!r}")
+        if map_name in seen_maps:
+            raise ValueError(f"map_pool contains duplicate map {map_name!r}")
+        seen_maps.add(map_name)
+
+    return map_pool
+
+
+def _validate_map_strength(team_name: str, map_name: str, value: Any) -> float:
+    """Validate one team/map strength value from JSON and return it as a float."""
+    try:
+        strength = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"Team {team_name!r} map {map_name!r} strength must be a number in [0, 1]"
+        ) from exc
+
+    if not 0 <= strength <= 1:
+        raise ValueError(
+            f"Team {team_name!r} map {map_name!r} strength must be in [0, 1], got {strength}"
+        )
+
+    return strength
+
+
+def _read_team_map_strengths(
+    team_name: str,
+    team_data: Dict[str, Any],
+    map_pool: Tuple[str, ...],
+) -> Dict[str, float]:
+    """Read optional per-map strengths, defaulting missing pool maps to neutral 0.5."""
+    map_strengths = {map_name: 0.5 for map_name in map_pool}
+    raw_maps = team_data.get("maps")
+    if raw_maps is None:
+        return map_strengths
+
+    if not isinstance(raw_maps, dict):
+        raise ValueError(f"Team {team_name!r} maps must be an object of map strengths")
+
+    for map_name, value in raw_maps.items():
+        if not isinstance(map_name, str) or not map_name.strip():
+            raise ValueError(f"Team {team_name!r} has an invalid map name: {map_name!r}")
+        map_strengths[map_name] = _validate_map_strength(team_name, map_name, value)
+
+    return map_strengths
+
+
 def _validate_supported_team_count(teams: List[Team]) -> None:
     """当前瑞士轮实现只覆盖 CS Major Pick'Em 的 16 队阶段。"""
     if len(teams) != SUPPORTED_TEAM_COUNT:
@@ -204,6 +275,7 @@ def load_tournament_config(file_path: str | Path) -> TournamentConfig:
         raise ValueError("配置文件缺少 systems 字段，无法判断评分系统顺序")
 
     system_names = _ordered_system_names(systems_data)
+    map_pool = _read_map_pool(data)
 
     # sigma 按 systems 顺序读取；缺失时回退到兼容旧代码的默认 SIGMA。
     sigma_data = data.get("sigma", {})
@@ -237,6 +309,7 @@ def load_tournament_config(file_path: str | Path) -> TournamentConfig:
                 name=team_name,
                 seed=_read_team_seed(team_name, team_data),
                 rating=rating,
+                map_strengths=_read_team_map_strengths(team_name, team_data, map_pool),
             )
         )
 
@@ -246,6 +319,7 @@ def load_tournament_config(file_path: str | Path) -> TournamentConfig:
         systems=system_names,
         sigma=sigma,
         weights=weights,
+        map_pool=map_pool,
         teams=tuple(teams),
     )
 

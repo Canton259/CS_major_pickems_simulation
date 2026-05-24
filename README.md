@@ -25,8 +25,8 @@ This project is developed based on the following open-source projects:
   - Statistical analysis of results / 结果统计分析
 
 - Greedy Algorithm / 贪心算法
-  - Best candidate Pick'Em combination search / 候选集内最佳竞猜组合搜索
-  - Heuristic and random search modes / 支持启发式和随机搜索模式
+  - Fast candidate Pick'Em combination search / 快速候选竞猜组合搜索
+  - Heuristic, random, and exhaustive search modes / 支持启发式、随机和全局穷举搜索模式
   - Probability-based team selection / 基于概率的队伍选择
   - Top 10 combinations ranking / Top 10 组合排名
 
@@ -36,13 +36,18 @@ This project is developed based on the following open-source projects:
   - Round-by-round progression / 逐轮晋级机制
   - Currently supports 16-team Swiss stages / 当前支持 16 队瑞士轮阶段
 
+- Map Veto Model / 地图 veto 模型
+  - Heuristic BO1 and BO3 Major map veto simulation / 启发式模拟 Major BO1 和 BO3 地图 ban/pick
+  - Configurable global `map_pool` in `major_stage.json` / 可在 `major_stage.json` 中配置全局地图池
+  - Optional per-team `maps` strengths / 每支队伍可选配置 `maps` 地图强度
+
 - Multi-process Computing / 多进程计算
   - Parallel simulation execution / 并行模拟执行
   - CPU core utilization / CPU核心利用
   - Performance optimization / 性能优化
 
 - Customizable Parameters / 可自定义参数
-  - VRS/HLTV rating weights / VRS/HLTV评分权重
+  - Default VRS/HLTV rating weights in `config.py` / `config.py` 中的默认 VRS/HLTV评分权重
   - Sigma value adjustment / Sigma值调整
   - Team data configuration / 队伍数据配置
 
@@ -51,9 +56,9 @@ This project is developed based on the following open-source projects:
 
 Recommended Python version / 推荐 Python 版本: **Python >= 3.10**
 
-The project currently uses only the Python standard library. `requirements.txt` is kept as a note file for compatibility.
+The base simulator uses the Python standard library. Exhaustive Pick'Em search in `greedy.py` uses NumPy and Numba.
 
-当前项目只使用 Python 标准库。`requirements.txt` 保留为兼容说明文件。
+基础模拟器使用 Python 标准库。`greedy.py` 的全局穷举竞猜搜索使用 NumPy 和 Numba。
 
 ```bash
 pip install -r requirements.txt
@@ -63,8 +68,10 @@ pip install -r requirements.txt
 ## 使用方法
 
 1. Configure Parameters / 配置参数:
-   - Set team information, stage sigma, and optional weights in `major_stage.json` / 在 `major_stage.json` 中设置队伍信息、阶段 sigma 和可选 weights
-   - If `weights` is missing, `VRS_WEIGHT` and `HLTV_WEIGHT` in `config.py` are used / 如果缺少 `weights` 字段，则使用 `config.py` 中的 `VRS_WEIGHT` 和 `HLTV_WEIGHT`
+   - Set team information and stage sigma in `major_stage.json` / 在 `major_stage.json` 中设置队伍信息和阶段 sigma
+   - Rating weights use `VRS_WEIGHT` and `HLTV_WEIGHT` in `config.py` by default / 评分权重默认使用 `config.py` 中的 `VRS_WEIGHT` 和 `HLTV_WEIGHT`
+   - `map_pool` configures the seven-map Major pool; if missing, the simulator uses Dust2, Mirage, Inferno, Nuke, Overpass, Ancient, and Anubis / `map_pool` 配置七图 Major 地图池；缺失时使用默认地图池
+   - Team `maps` values are optional map strengths from 0.0 to 1.0; missing teams or missing maps default to neutral `0.5` / 每队 `maps` 是可选地图强度；缺失队伍字段或缺失地图默认使用中性 `0.5`
 
 2. Run Simulation / 运行模拟:
 ```bash
@@ -73,7 +80,7 @@ python simulate.py
 
 You can also specify simulation parameters / 也可以指定模拟参数:
 ```bash
-python simulate.py --input major_stage.json --iterations 100000 --workers 8 --seed 42
+python simulate.py --input major_stage.json --iterations 1000000 --workers 8 --seed 42
 ```
 
 3. View Results / 查看结果:
@@ -97,6 +104,7 @@ Heuristic search is the default. Random search can be used as an additional expl
 ```bash
 python greedy.py --results result.txt --search-mode heuristic
 python greedy.py --results result.txt --search-mode random --random-candidates 10000 --seed 42
+python greedy.py --results result.txt --search-mode exhaustive --top 10
 ```
 
 5. Run Tests / 运行测试:
@@ -113,20 +121,20 @@ The workflow is defined in `.github/workflows/test.yml` / 工作流定义在 `.g
 ## Parameters
 ## 参数说明
 
-- `weights.valve`: Valve/VRS rating weight in `major_stage.json` (Current default: 0.5) / `major_stage.json` 中的 Valve/VRS 评分权重（当前默认: 0.5）
-- `weights.hltv`: HLTV rating weight in `major_stage.json` (Current default: 0.5) / `major_stage.json` 中的 HLTV 评分权重（当前默认: 0.5）
-- `VRS_WEIGHT`: Fallback Valve/VRS weight in `config.py` when `weights.valve` is missing (Default: 0.5) / 缺少 `weights.valve` 时使用的 `config.py` 回退权重（默认: 0.5）
-- `HLTV_WEIGHT`: Fallback HLTV weight in `config.py` when `weights.hltv` is missing (Default: 0.5) / 缺少 `weights.hltv` 时使用的 `config.py` 回退权重（默认: 0.5）
+- `VRS_WEIGHT`: Default Valve/VRS rating weight in `config.py` (Default: 0.5) / `config.py` 中的默认 Valve/VRS 评分权重（默认: 0.5）
+- `HLTV_WEIGHT`: Default HLTV rating weight in `config.py` (Default: 0.5) / `config.py` 中的默认 HLTV 评分权重（默认: 0.5）
 - `sigma.valve`: Valve Elo sigma in `major_stage.json` (Current default: 600) / `major_stage.json` 中的 Valve Elo 标准差参数（当前默认: 600）
 - `sigma.hltv`: HLTV Elo sigma in `major_stage.json` (Current default: 1600) / `major_stage.json` 中的 HLTV Elo 标准差参数（当前默认: 1600）
+- `map_pool`: Global seven-map pool in `major_stage.json`; missing field uses the built-in default pool / `major_stage.json` 中的全局七图地图池；缺失时使用内置默认地图池
+- `teams.*.maps`: Optional per-team map strengths from 0.0 to 1.0; missing maps default to `0.5` / 每队可选地图强度，范围 0.0 到 1.0；缺失地图默认 `0.5`
 - `SIGMA`: Compatibility fallback in `config.py` (Default: 349.2). Normal simulations use `major_stage.json` first. / `config.py` 中的兼容回退值（默认: 349.2）。正常模拟优先使用 `major_stage.json`。
 - Team count: the current simulator only supports 16-team Swiss stages / 队伍数量：当前模拟器只支持 16 队瑞士轮
-- `--iterations`: Number of Monte Carlo simulations (Default: 100000) / 蒙特卡洛模拟次数（默认: 100000）
+- `--iterations`: Number of Monte Carlo simulations (Default: 1000000) / 蒙特卡洛模拟次数（默认: 1000000）
 - `--workers`: Number of worker processes (Default: CPU cores minus one) / 并行进程数（默认: CPU 核心数减一）
 - `--seed`: Random seed for reproducible runs with the same worker count / 随机种子；在相同进程数下可复现实验
 - `--output`: Simulation result output path / 模拟结果输出路径
 - `--team-summary`: Per-team probability CSV output path / 队伍单项概率 CSV 输出路径
-- `greedy.py --search-mode`: Candidate search mode. `heuristic` is default; `random` generates legal random Pick'Em combinations / 候选搜索模式。`heuristic` 为默认；`random` 会生成合法随机竞猜组合
+- `greedy.py --search-mode`: Candidate search mode. `heuristic` is default; `random` generates legal random Pick'Em combinations; `exhaustive` searches all legal combinations globally / 候选搜索模式。`heuristic` 为默认；`random` 会生成合法随机竞猜组合；`exhaustive` 会全局搜索所有合法组合
 - `greedy.py --random-candidates`: Number of random candidates generated in random mode (Default: 10000) / random 模式生成的随机候选数量（默认: 10000）
 - `greedy.py --seed`: Random seed for greedy random search / greedy 随机搜索模式的随机种子
 
@@ -135,9 +143,19 @@ The workflow is defined in `.github/workflows/test.yml` / 工作流定义在 `.g
 
 - Valve/VRS uses an Elo/logistic formula / Valve/VRS 使用 Elo/logistic 公式
 - HLTV uses an Elo/logistic formula / HLTV 使用 Elo/logistic 公式
-- `weights` controls how much each rating system contributes / `weights` 控制各评分系统在最终胜率中的权重
+- `VRS_WEIGHT` and `HLTV_WEIGHT` control how much each rating system contributes / `VRS_WEIGHT` 和 `HLTV_WEIGHT` 控制各评分系统在最终胜率中的权重
 - `sigma` controls how strongly rating differences affect win probability / `sigma` 控制评分差对胜率的影响强度
 - Match probabilities are clamped to avoid overconfidence / 概率会被裁剪，避免模型过度自信
+
+## Map Veto
+## 地图 veto
+
+- The simulator now supports heuristic Major map veto for BO1 and BO3 matches / 模拟器现在支持 BO1 和 BO3 的启发式 Major 地图 veto。
+- BO1 follows: higher seed chooses Team A by default, Team A removes 2 maps, Team B removes 3 maps, Team A removes 1 map, and the remaining map is played / BO1 流程为高种子默认选择 Team A，Team A ban 2 图，Team B ban 3 图，Team A ban 1 图，剩余 1 图进行比赛。
+- BO3 follows: Team A removes 1, Team B removes 1, Team A picks map 1, Team B picks map 2, Team B removes 1, Team A removes 1, and the remaining map is the decider / BO3 流程为 A ban、B ban、A pick、B pick、B ban、A ban，剩余图作为决胜图。
+- The current strategy is heuristic: bans remove the opponent's largest relative map advantage, picks choose the team's largest relative map advantage, and ties are resolved by map name for stable results / 当前策略是启发式：ban 对手相对优势图，pick 自己相对优势图，同分时按地图名稳定排序。
+- This does not model real teams' historical ban/pick habits / 这不代表真实队伍的历史 ban/pick 习惯。
+- Map strength gently adjusts the base VRS/HLTV win probability and does not replace the rating model / 地图强度只是对基础 VRS/HLTV 胜率做温和修正，不会替代原有评分模型。
 
 ## Output Formats
 ## 输出格式
@@ -157,7 +175,7 @@ team,three_zero_count,advanced_count,qualified_count,zero_three_count,three_zero
 ## 模型局限性
 
 - The current simulator only supports 16-team Swiss stages / 当前模拟器只支持 16 队瑞士轮阶段
-- The simulator does not fully model map veto / 当前未完整模拟地图 veto
+- Map veto is heuristic and does not model each team's real historical preferences / 地图 veto 是启发式模拟，不代表每队真实历史偏好
 - It does not fully account for recent form, roster changes, patch/meta updates, travel, or LAN conditions / 当前未完整考虑近期状态、阵容变动、版本更新、旅行和 LAN 状态
 - Monte Carlo results depend heavily on the input win-probability model / 蒙特卡洛结果高度依赖输入胜率模型
 
