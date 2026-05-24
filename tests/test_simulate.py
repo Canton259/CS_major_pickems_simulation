@@ -116,6 +116,36 @@ class ValvePairingTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "6 支队伍"):
             swiss.pair_group(teams, round_number=4)
 
+    def test_simulate_round_locks_all_pairings_before_match_results_change_buchholz(self) -> None:
+        teams = make_test_teams(8)
+        swiss = make_swiss(teams)
+        for team in teams[0:4]:
+            swiss.records[team].wins = 1
+            swiss.records[team].losses = 1
+        for team in teams[4:6]:
+            swiss.records[team].losses = 2
+        for team in teams[6:8]:
+            swiss.records[team].wins = 2
+
+        for team in teams[0:3]:
+            mark_played(swiss, team, teams[6])
+            mark_played(swiss, team, teams[4])
+        mark_played(swiss, teams[3], teams[7])
+        mark_played(swiss, teams[3], teams[4])
+
+        played_pairs: list[tuple[int, int]] = []
+
+        def fake_simulate_match(team_a: Team, team_b: Team) -> None:
+            played_pairs.append((team_a.seed, team_b.seed))
+            if len(played_pairs) == 1:
+                swiss.records[teams[7]].wins += 1
+
+        swiss.simulate_match = fake_simulate_match  # type: ignore[method-assign]
+
+        swiss.simulate_round()
+
+        self.assertEqual(played_pairs, [(7, 8), (1, 4), (2, 3), (5, 6)])
+
 
 class SimulationTests(unittest.TestCase):
     def test_fixed_seed_single_worker_is_reproducible(self) -> None:

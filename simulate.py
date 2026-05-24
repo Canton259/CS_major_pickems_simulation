@@ -294,24 +294,28 @@ class SwissSystem:
 
         raise ValueError(f"不支持第 {round_number} 轮瑞士轮配对")
 
-    def simulate_round(self) -> None:
-        """根据当前战绩分组并模拟一轮对阵。"""
+    def pair_round(self) -> list[tuple[Team, Team]]:
+        """根据本轮开始时的战绩和种子快照生成整轮对阵。"""
         round_number = self.current_round()
         ordered_remaining = sorted(self.remaining, key=self.seeding)
 
         if round_number == 1:
-            for team_a, team_b in self.pair_initial_round(ordered_remaining):
-                self.simulate_match(team_a, team_b)
-            return
+            return self.pair_initial_round(ordered_remaining)
 
         groups: dict[tuple[int, int], list[Team]] = {}
         for team in ordered_remaining:
             record = self.records[team]
             groups.setdefault((record.wins, record.losses), []).append(team)
 
+        round_pairs: list[tuple[Team, Team]] = []
         for group in groups.values():
-            for team_a, team_b in self.pair_group(group, round_number):
-                self.simulate_match(team_a, team_b)
+            round_pairs.extend(self.pair_group(group, round_number))
+        return round_pairs
+
+    def simulate_round(self) -> None:
+        """根据当前战绩分组并模拟一轮对阵。"""
+        for team_a, team_b in self.pair_round():
+            self.simulate_match(team_a, team_b)
 
     def simulate_tournament(self) -> None:
         """持续模拟轮次，直到所有队伍晋级或淘汰。"""
