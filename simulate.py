@@ -28,6 +28,25 @@ from config import (
 )
 
 
+VALVE_ROUND_FOUR_FIVE_PAIRING_PRIORITY: tuple[tuple[tuple[int, int], ...], ...] = (
+    ((0, 5), (1, 4), (2, 3)),
+    ((0, 5), (1, 3), (2, 4)),
+    ((0, 4), (1, 5), (2, 3)),
+    ((0, 4), (1, 3), (2, 5)),
+    ((0, 3), (1, 5), (2, 4)),
+    ((0, 3), (1, 4), (2, 5)),
+    ((0, 5), (1, 2), (3, 4)),
+    ((0, 4), (1, 2), (3, 5)),
+    ((0, 2), (1, 5), (3, 4)),
+    ((0, 2), (1, 4), (3, 5)),
+    ((0, 3), (1, 2), (4, 5)),
+    ((0, 2), (1, 3), (4, 5)),
+    ((0, 1), (2, 5), (3, 4)),
+    ((0, 1), (2, 4), (3, 5)),
+    ((0, 1), (2, 3), (4, 5)),
+)
+
+
 @dataclass
 class Record:
     """
@@ -193,78 +212,105 @@ class SwissSystem:
         """判断两支队伍此前是否已经交手。"""
         return team_b in self.records[team_a].teams_faced
 
-    def pair_group(self, group: list[Team]) -> list[tuple[Team, Team]]:
-        """
-        为同一战绩组生成配对。
+    def current_round(self) -> int:
+        """根据剩余队伍已完成的比赛数推断当前瑞士轮轮次。"""
+        if not self.remaining:
+            return 0
+        return max(self.records[team].wins + self.records[team].losses for team in self.remaining) + 1
 
-        仍然沿用“上半区 vs 下半区反向”的原始配对偏好；
-        若有重复对阵风险，则在同组内寻找重复次数最少、偏离原始顺序最小的配对。
+    def pairing_repeat_count(self, pairs: list[tuple[Team, Team]]) -> int:
+        """统计一组候选配对中会产生多少次重复交手。"""
+        return sum(int(self.has_played(team_a, team_b)) for team_a, team_b in pairs)
+
+    def select_pairing(self, candidates: list[list[tuple[Team, Team]]]) -> list[tuple[Team, Team]]:
+        """
+        按 Valve 优先顺序选择配对。
+
+        优先返回第一组完全不重赛的配对；若所有候选都会重赛，则选择重赛次数最少的一组。
+        重赛次数相同时保留候选列表中的 Valve 优先顺序。
+        """
+        best_pairs: list[tuple[Team, Team]] | None = None
+        best_repeat_count: int | None = None
+
+        for pairs in candidates:
+            repeat_count = self.pairing_repeat_count(pairs)
+            if repeat_count == 0:
+                return pairs
+            if best_repeat_count is None or repeat_count < best_repeat_count:
+                best_repeat_count = repeat_count
+                best_pairs = pairs
+
+        return best_pairs or []
+
+    def high_low_pairing_candidates(self, group: list[Team]) -> list[list[tuple[Team, Team]]]:
+        """生成第 2/3 轮高种子对低种子的候选配对，顺序即 Valve 优先级。"""
+        if not group:
+            return [[]]
+
+        team_a = group[0]
+        candidates: list[list[tuple[Team, Team]]] = []
+        for candidate_index in range(len(group) - 1, 0, -1):
+            team_b = group[candidate_index]
+            remaining = group[1:candidate_index] + group[candidate_index + 1 :]
+            for rest_pairs in self.high_low_pairing_candidates(remaining):
+                candidates.append([(team_a, team_b), *rest_pairs])
+        return candidates
+
+    def priority_table_pairing_candidates(self, group: list[Team]) -> list[list[tuple[Team, Team]]]:
+        """按 Valve 第 4/5 轮六队优先表生成候选配对。"""
+        return [
+            [(group[index_a], group[index_b]) for index_a, index_b in row]
+            for row in VALVE_ROUND_FOUR_FIVE_PAIRING_PRIORITY
+        ]
+
+    def pair_initial_round(self, group: list[Team]) -> list[tuple[Team, Team]]:
+        """第一轮固定为 1v9、2v10、...、8v16。"""
+        ordered = sorted(group, key=self.seeding)
+        midpoint = len(ordered) // 2
+        return list(zip(ordered[:midpoint], ordered[midpoint:]))
+
+    def pair_group(self, group: list[Team], round_number: int) -> list[tuple[Team, Team]]:
+        """
+        为同一战绩组生成 Valve Major 瑞士轮配对。
+
+        第 2/3 轮按高种子对最低可用种子；第 4/5 轮按 Valve 六队优先表。
         """
         if len(group) < 2:
             return []
+        if len(group) % 2 != 0:
+            raise ValueError(f"瑞士轮同战绩组队伍数必须为偶数，当前为 {len(group)}")
 
-        first_half = list(group[: len(group) // 2])
-        second_half = list(reversed(group[len(group) // 2 :]))
-        if len(first_half) != len(second_half):
-            # 理论上当前 16 队瑞士轮不会出现奇数组；这里保留兜底，行为接近原 zip。
-            return list(zip(first_half, second_half))
+        ordered = sorted(group, key=self.seeding)
+        if round_number in (2, 3):
+            return self.select_pairing(self.high_low_pairing_candidates(ordered))
 
-        best_pairs: list[tuple[Team, Team]] | None = None
-        best_score: tuple[int, int] | None = None
-
-        def search(
-            index: int,
-            available: list[Team],
-            pairs: list[tuple[Team, Team]],
-            repeat_count: int,
-            displacement: int,
-        ) -> None:
-            nonlocal best_pairs, best_score
-
-            if index == len(first_half):
-                score = (repeat_count, displacement)
-                if best_score is None or score < best_score:
-                    best_score = score
-                    best_pairs = list(pairs)
-                return
-
-            team_a = first_half[index]
-            for candidate_index, team_b in enumerate(available):
-                next_available = available[:candidate_index] + available[candidate_index + 1 :]
-                pairs.append((team_a, team_b))
-                search(
-                    index + 1,
-                    next_available,
-                    pairs,
-                    repeat_count + int(self.has_played(team_a, team_b)),
-                    displacement + abs(index - second_half.index(team_b)),
+        if round_number in (4, 5):
+            if len(ordered) != 6:
+                raise ValueError(
+                    f"Valve 第 {round_number} 轮配对要求每个非空同战绩组有 6 支队伍，"
+                    f"当前为 {len(ordered)} 支"
                 )
-                pairs.pop()
+            return self.select_pairing(self.priority_table_pairing_candidates(ordered))
 
-        search(0, second_half, [], 0, 0)
-        return best_pairs or list(zip(first_half, second_half))
+        raise ValueError(f"不支持第 {round_number} 轮瑞士轮配对")
 
     def simulate_round(self) -> None:
         """根据当前战绩分组并模拟一轮对阵。"""
-        even_teams, pos_teams, neg_teams = [], [], []
+        round_number = self.current_round()
+        ordered_remaining = sorted(self.remaining, key=self.seeding)
 
-        for team in sorted(self.remaining, key=self.seeding):
-            if self.records[team].diff > 0:
-                pos_teams.append(team)
-            elif self.records[team].diff < 0:
-                neg_teams.append(team)
-            else:
-                even_teams.append(team)
-
-        # 第一轮固定为上半区对下半区：1-9、2-10、3-11 ...
-        if len(even_teams) == len(self.records):
-            for team_a, team_b in zip(even_teams, even_teams[len(even_teams) // 2 :]):
+        if round_number == 1:
+            for team_a, team_b in self.pair_initial_round(ordered_remaining):
                 self.simulate_match(team_a, team_b)
             return
 
-        # 后续轮次每个战绩组内部配对。当前实现沿用原项目的种子/Buchholz排序策略。
-        for group in (pos_teams, even_teams, neg_teams):
-            for team_a, team_b in self.pair_group(group):
+        groups: dict[tuple[int, int], list[Team]] = {}
+        for team in ordered_remaining:
+            record = self.records[team]
+            groups.setdefault((record.wins, record.losses), []).append(team)
+
+        for group in groups.values():
+            for team_a, team_b in self.pair_group(group, round_number):
                 self.simulate_match(team_a, team_b)
 
     def simulate_tournament(self) -> None:
