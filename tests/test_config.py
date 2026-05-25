@@ -58,12 +58,49 @@ class ConfigLoadingTests(unittest.TestCase):
 
         self.assertEqual(tournament.map_pool, DEFAULT_MAP_POOL)
 
-    def test_missing_team_maps_default_to_neutral_strengths(self) -> None:
+    def test_missing_team_map_stats_default_to_neutral_strengths_and_zero_history(self) -> None:
         tournament = load_from_temp(make_config())
 
         self.assertEqual(tournament.teams[0].map_strengths, {map_name: 0.5 for map_name in DEFAULT_MAP_POOL})
+        self.assertEqual(tournament.teams[0].map_win_rates, {map_name: 0.0 for map_name in DEFAULT_MAP_POOL})
+        self.assertEqual(tournament.teams[0].map_pick_rates, {map_name: 0.0 for map_name in DEFAULT_MAP_POOL})
+        self.assertEqual(tournament.teams[0].map_ban_rates, {map_name: 0.0 for map_name in DEFAULT_MAP_POOL})
+        self.assertEqual(tournament.teams[0].map_played_counts, {map_name: 0 for map_name in DEFAULT_MAP_POOL})
 
-    def test_missing_single_map_strength_defaults_to_neutral(self) -> None:
+    def test_map_stats_missing_single_map_defaults_to_neutral_strength_and_zero_history(self) -> None:
+        config_data = make_config()
+        config_data["map_pool"] = ["Dust2", "Mirage", "Inferno"]
+        config_data["teams"]["Team1"]["map_stats"] = {
+            "Dust2": {
+                "strength": 0.61,
+                "win_rate": 0.66,
+                "pick_rate": 0.22,
+                "ban_rate": 0.33,
+                "maps_played": 13,
+            },
+            "Mirage": {"strength": 0.43},
+        }
+
+        tournament = load_from_temp(config_data)
+
+        self.assertEqual(tournament.map_pool, ("Dust2", "Mirage", "Inferno"))
+        self.assertEqual(tournament.teams[0].map_strengths["Dust2"], 0.61)
+        self.assertEqual(tournament.teams[0].map_win_rates["Dust2"], 0.66)
+        self.assertEqual(tournament.teams[0].map_pick_rates["Dust2"], 0.22)
+        self.assertEqual(tournament.teams[0].map_ban_rates["Dust2"], 0.33)
+        self.assertEqual(tournament.teams[0].map_played_counts["Dust2"], 13)
+        self.assertEqual(tournament.teams[0].map_strengths["Mirage"], 0.43)
+        self.assertEqual(tournament.teams[0].map_win_rates["Mirage"], 0.0)
+        self.assertEqual(tournament.teams[0].map_pick_rates["Mirage"], 0.0)
+        self.assertEqual(tournament.teams[0].map_ban_rates["Mirage"], 0.0)
+        self.assertEqual(tournament.teams[0].map_played_counts["Mirage"], 0)
+        self.assertEqual(tournament.teams[0].map_strengths["Inferno"], 0.5)
+        self.assertEqual(tournament.teams[0].map_win_rates["Inferno"], 0.0)
+        self.assertEqual(tournament.teams[0].map_pick_rates["Inferno"], 0.0)
+        self.assertEqual(tournament.teams[0].map_ban_rates["Inferno"], 0.0)
+        self.assertEqual(tournament.teams[0].map_played_counts["Inferno"], 0)
+
+    def test_legacy_maps_still_load_as_strengths(self) -> None:
         config_data = make_config()
         config_data["map_pool"] = ["Dust2", "Mirage", "Inferno"]
         config_data["teams"]["Team1"]["maps"] = {
@@ -73,18 +110,63 @@ class ConfigLoadingTests(unittest.TestCase):
 
         tournament = load_from_temp(config_data)
 
-        self.assertEqual(tournament.map_pool, ("Dust2", "Mirage", "Inferno"))
         self.assertEqual(tournament.teams[0].map_strengths["Dust2"], 0.61)
         self.assertEqual(tournament.teams[0].map_strengths["Mirage"], 0.43)
         self.assertEqual(tournament.teams[0].map_strengths["Inferno"], 0.5)
+        self.assertEqual(tournament.teams[0].map_win_rates["Dust2"], 0.0)
+        self.assertEqual(tournament.teams[0].map_pick_rates["Dust2"], 0.0)
+        self.assertEqual(tournament.teams[0].map_ban_rates["Dust2"], 0.0)
+        self.assertEqual(tournament.teams[0].map_played_counts["Dust2"], 0)
+
+    def test_no_sample_map_stats_can_store_forced_ban_rate(self) -> None:
+        config_data = make_config()
+        config_data["teams"]["Team1"]["map_stats"] = {
+            "Dust2": {
+                "strength": 0.0,
+                "win_rate": 0.0,
+                "pick_rate": 0.0,
+                "ban_rate": 1.0,
+                "maps_played": 0,
+            }
+        }
+
+        tournament = load_from_temp(config_data)
+
+        self.assertEqual(tournament.teams[0].map_strengths["Dust2"], 0.0)
+        self.assertEqual(tournament.teams[0].map_win_rates["Dust2"], 0.0)
+        self.assertEqual(tournament.teams[0].map_pick_rates["Dust2"], 0.0)
+        self.assertEqual(tournament.teams[0].map_ban_rates["Dust2"], 1.0)
+        self.assertEqual(tournament.teams[0].map_played_counts["Dust2"], 0)
 
     def test_invalid_map_strength_raises_clear_error(self) -> None:
         for value in (-0.01, 1.01):
             with self.subTest(value=value):
                 config_data = make_config()
-                config_data["teams"]["Team1"]["maps"] = {"Mirage": value}
+                config_data["teams"]["Team1"]["map_stats"] = {"Mirage": {"strength": value}}
 
-                with self.assertRaisesRegex(ValueError, "Team1.*Mirage.*\\[0, 1\\]"):
+                with self.assertRaisesRegex(ValueError, "Team1.*Mirage.*strength.*\\[0, 1\\]"):
+                    load_from_temp(config_data)
+
+    def test_invalid_map_history_rate_raises_clear_error(self) -> None:
+        for field_name in ("win_rate", "pick_rate", "ban_rate"):
+            with self.subTest(field_name=field_name):
+                config_data = make_config()
+                config_data["teams"]["Team1"]["map_stats"] = {
+                    "Mirage": {"strength": 0.5, field_name: 1.01}
+                }
+
+                with self.assertRaisesRegex(ValueError, f"Team1.*Mirage.*{field_name}.*\\[0, 1\\]"):
+                    load_from_temp(config_data)
+
+    def test_invalid_maps_played_raises_clear_error(self) -> None:
+        for value in (-1, 1.5, "3", True):
+            with self.subTest(value=value):
+                config_data = make_config()
+                config_data["teams"]["Team1"]["map_stats"] = {
+                    "Mirage": {"strength": 0.5, "maps_played": value}
+                }
+
+                with self.assertRaisesRegex(ValueError, "Team1.*Mirage.*maps_played"):
                     load_from_temp(config_data)
 
     def test_weights_cannot_both_be_zero(self) -> None:

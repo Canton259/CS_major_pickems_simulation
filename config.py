@@ -15,8 +15,8 @@ from typing import Any, Callable, Dict, List, Tuple
 
 
 # 评分系统权重配置。这里仍保留为全局常量，方便快速调参。
-VRS_WEIGHT = 0.5  # Valve 评分系统权重
-HLTV_WEIGHT = 0.5  # HLTV 评分系统权重
+VRS_WEIGHT = 0.7  # Valve 评分系统权重
+HLTV_WEIGHT = 0.3  # HLTV 评分系统权重
 
 # 兼容旧调用的默认 sigma。真实模拟时优先使用 major_stage.json 中的 sigma。
 SIGMA = 349.2
@@ -56,6 +56,10 @@ class Team:
     seed: int
     rating: Tuple[float, ...]
     map_strengths: Dict[str, float] = field(default_factory=dict)
+    map_win_rates: Dict[str, float] = field(default_factory=dict)
+    map_pick_rates: Dict[str, float] = field(default_factory=dict)
+    map_ban_rates: Dict[str, float] = field(default_factory=dict)
+    map_played_counts: Dict[str, int] = field(default_factory=dict)
 
     def __str__(self) -> str:
         return self.name
@@ -209,43 +213,114 @@ def _read_map_pool(data: Dict[str, Any]) -> Tuple[str, ...]:
     return map_pool
 
 
-def _validate_map_strength(team_name: str, map_name: str, value: Any) -> float:
-    """Validate one team/map strength value from JSON and return it as a float."""
-    try:
-        strength = float(value)
-    except (TypeError, ValueError) as exc:
+def _validate_map_stat(team_name: str, map_name: str, field_name: str, value: Any) -> float:
+    """Validate one team/map stat value from JSON and return it as a float."""
+    if isinstance(value, bool):
         raise ValueError(
-            f"Team {team_name!r} map {map_name!r} strength must be a number in [0, 1]"
-        ) from exc
-
-    if not 0 <= strength <= 1:
-        raise ValueError(
-            f"Team {team_name!r} map {map_name!r} strength must be in [0, 1], got {strength}"
+            f"Team {team_name!r} map {map_name!r} {field_name} must be a number in [0, 1]"
         )
 
-    return strength
+    try:
+        stat_value = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"Team {team_name!r} map {map_name!r} {field_name} must be a number in [0, 1]"
+        ) from exc
+
+    if not 0 <= stat_value <= 1:
+        raise ValueError(
+            f"Team {team_name!r} map {map_name!r} {field_name} must be in [0, 1], got {stat_value}"
+        )
+
+    return stat_value
 
 
-def _read_team_map_strengths(
+def _validate_maps_played(team_name: str, map_name: str, value: Any) -> int:
+    """Validate a non-negative integer map sample count."""
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(
+            f"Team {team_name!r} map {map_name!r} maps_played must be a non-negative integer"
+        )
+    if value < 0:
+        raise ValueError(
+            f"Team {team_name!r} map {map_name!r} maps_played must be a non-negative integer"
+        )
+    return value
+
+
+def _validate_team_map_name(team_name: str, map_name: Any) -> str:
+    if not isinstance(map_name, str) or not map_name.strip():
+        raise ValueError(f"Team {team_name!r} has an invalid map name: {map_name!r}")
+    return map_name
+
+
+def _read_team_map_stats(
     team_name: str,
     team_data: Dict[str, Any],
     map_pool: Tuple[str, ...],
-) -> Dict[str, float]:
-    """Read optional per-map strengths, defaulting missing pool maps to neutral 0.5."""
+) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, float], Dict[str, float], Dict[str, int]]:
+    """Read optional per-map stats, defaulting missing pool maps to neutral history."""
     map_strengths = {map_name: 0.5 for map_name in map_pool}
+    map_win_rates = {map_name: 0.0 for map_name in map_pool}
+    map_pick_rates = {map_name: 0.0 for map_name in map_pool}
+    map_ban_rates = {map_name: 0.0 for map_name in map_pool}
+    map_played_counts = {map_name: 0 for map_name in map_pool}
+
+    raw_map_stats = team_data.get("map_stats")
+    if raw_map_stats is not None:
+        if not isinstance(raw_map_stats, dict):
+            raise ValueError(f"Team {team_name!r} map_stats must be an object of map stat objects")
+
+        for raw_map_name, raw_stats in raw_map_stats.items():
+            map_name = _validate_team_map_name(team_name, raw_map_name)
+            if not isinstance(raw_stats, dict):
+                raise ValueError(
+                    f"Team {team_name!r} map {map_name!r} map_stats entry must be an object"
+                )
+            map_strengths[map_name] = _validate_map_stat(
+                team_name,
+                map_name,
+                "strength",
+                raw_stats.get("strength", 0.5),
+            )
+            map_win_rates[map_name] = _validate_map_stat(
+                team_name,
+                map_name,
+                "win_rate",
+                raw_stats.get("win_rate", 0.0),
+            )
+            map_pick_rates[map_name] = _validate_map_stat(
+                team_name,
+                map_name,
+                "pick_rate",
+                raw_stats.get("pick_rate", 0.0),
+            )
+            map_ban_rates[map_name] = _validate_map_stat(
+                team_name,
+                map_name,
+                "ban_rate",
+                raw_stats.get("ban_rate", 0.0),
+            )
+            map_played_counts[map_name] = _validate_maps_played(
+                team_name,
+                map_name,
+                raw_stats.get("maps_played", 0),
+            )
+
+        return map_strengths, map_win_rates, map_pick_rates, map_ban_rates, map_played_counts
+
     raw_maps = team_data.get("maps")
     if raw_maps is None:
-        return map_strengths
+        return map_strengths, map_win_rates, map_pick_rates, map_ban_rates, map_played_counts
 
     if not isinstance(raw_maps, dict):
         raise ValueError(f"Team {team_name!r} maps must be an object of map strengths")
 
-    for map_name, value in raw_maps.items():
-        if not isinstance(map_name, str) or not map_name.strip():
-            raise ValueError(f"Team {team_name!r} has an invalid map name: {map_name!r}")
-        map_strengths[map_name] = _validate_map_strength(team_name, map_name, value)
+    for raw_map_name, value in raw_maps.items():
+        map_name = _validate_team_map_name(team_name, raw_map_name)
+        map_strengths[map_name] = _validate_map_stat(team_name, map_name, "strength", value)
 
-    return map_strengths
+    return map_strengths, map_win_rates, map_pick_rates, map_ban_rates, map_played_counts
 
 
 def _validate_supported_team_count(teams: List[Team]) -> None:
@@ -303,13 +378,28 @@ def load_tournament_config(file_path: str | Path) -> TournamentConfig:
             )
             for system_name in system_names
         )
+        (
+            map_strengths,
+            map_win_rates,
+            map_pick_rates,
+            map_ban_rates,
+            map_played_counts,
+        ) = _read_team_map_stats(
+            team_name,
+            team_data,
+            map_pool,
+        )
         teams.append(
             Team(
                 id=team_id,
                 name=team_name,
                 seed=_read_team_seed(team_name, team_data),
                 rating=rating,
-                map_strengths=_read_team_map_strengths(team_name, team_data, map_pool),
+                map_strengths=map_strengths,
+                map_win_rates=map_win_rates,
+                map_pick_rates=map_pick_rates,
+                map_ban_rates=map_ban_rates,
+                map_played_counts=map_played_counts,
             )
         )
 

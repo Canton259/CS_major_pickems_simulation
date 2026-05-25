@@ -1,14 +1,17 @@
 {
   "metadata": {
     "event": "IEM Cologne Major 2026 Stage 1",
-    "updated_at": "2026-05-24",
+    "updated_at": "2026-05-25",
     "notes": [
       "参赛队伍参考 HLTV 的 IEM Cologne Major 2026 Stage 1 赛事页。",
       "seed 用于匹配 HLTV 公布的 Stage 1 首轮对阵顺序。",
-      "valve 使用 HLTV Valve Global Ranking 2026-05-23 points。",
-      "hltv 使用 HLTV World Ranking 2026-05-18 points。",
-      "maps uses HLTV team map stats Win rate: CS2, 2025-11-24 to 2026-05-24, current map_pool only.",
-      "maps values without an HLTV sample in that 6-month window are set to 0 by user request."
+      "valve 使用 HLTV Valve Global Ranking 2026-05-25 points。",
+      "hltv 使用 HLTV World Ranking 2026-05-18 points（2026-05-25 查询时最新可用）。",
+      "map_stats uses user-provided HLTV past-3-month team map data for the current map_pool: WR, Pick %, Ban %, and W-L.",
+      "strength is recalculated from WR, maps_played, Pick %, and Ban % with the user-provided formula, then divided by 100 and clamped to [0, 1].",
+      "win_rate stores WR as a decimal, maps_played stores wins plus losses, and pick_rate/ban_rate store HLTV percentages as decimals.",
+      "Maps with no past-3-month sample or not listed in the source txt are stored as strength=0.0, win_rate=0.0, pick_rate=0.0, ban_rate=1.0, maps_played=0.",
+      "First Pick is not treated specially; first-ban priority is inferred from the highest ban_rate, with shared first-ban maps reserved for the lower seed team."
     ]
   },
   "systems": {
@@ -31,226 +34,898 @@
   "teams": {
     "GamerLegion": {
       "seed": 1,
-      "valve": 1742,
+      "valve": 1726,
       "hltv": 214,
-      "maps": {
-        "Dust2": 0.0,
-        "Mirage": 0.609,
-        "Inferno": 0.682,
-        "Nuke": 0.625,
-        "Overpass": 0.5,
-        "Ancient": 0.692,
-        "Anubis": 0.25
+      "map_stats": {
+        "Dust2": {
+          "strength": 0.0,
+          "win_rate": 0.0,
+          "pick_rate": 0.0,
+          "ban_rate": 1.0,
+          "maps_played": 0
+        },
+        "Mirage": {
+          "strength": 0.467,
+          "win_rate": 0.462,
+          "pick_rate": 0.533,
+          "ban_rate": 0.0,
+          "maps_played": 13
+        },
+        "Inferno": {
+          "strength": 0.531,
+          "win_rate": 0.636,
+          "pick_rate": 0.471,
+          "ban_rate": 0.083,
+          "maps_played": 11
+        },
+        "Nuke": {
+          "strength": 0.484,
+          "win_rate": 0.75,
+          "pick_rate": 0.125,
+          "ban_rate": 0.0,
+          "maps_played": 8
+        },
+        "Overpass": {
+          "strength": 0.149,
+          "win_rate": 0.333,
+          "pick_rate": 0.071,
+          "ban_rate": 0.259,
+          "maps_played": 3
+        },
+        "Ancient": {
+          "strength": 0.423,
+          "win_rate": 0.714,
+          "pick_rate": 0.067,
+          "ban_rate": 0.13,
+          "maps_played": 7
+        },
+        "Anubis": {
+          "strength": 0.0,
+          "win_rate": 0.0,
+          "pick_rate": 0.0,
+          "ban_rate": 0.24,
+          "maps_played": 3
+        }
       }
     },
     "B8": {
       "seed": 2,
-      "valve": 1606,
+      "valve": 1593,
       "hltv": 122,
-      "maps": {
-        "Dust2": 0.556,
-        "Mirage": 0.586,
-        "Inferno": 0.308,
-        "Nuke": 0.3,
-        "Overpass": 0.333,
-        "Ancient": 0.68,
-        "Anubis": 0.0
+      "map_stats": {
+        "Dust2": {
+          "strength": 0.32,
+          "win_rate": 0.462,
+          "pick_rate": 0.03,
+          "ban_rate": 0.11,
+          "maps_played": 13
+        },
+        "Mirage": {
+          "strength": 0.625,
+          "win_rate": 0.7,
+          "pick_rate": 0.65,
+          "ban_rate": 0.01,
+          "maps_played": 20
+        },
+        "Inferno": {
+          "strength": 0.155,
+          "win_rate": 0.333,
+          "pick_rate": 0.0,
+          "ban_rate": 0.34,
+          "maps_played": 9
+        },
+        "Nuke": {
+          "strength": 0.1,
+          "win_rate": 0.25,
+          "pick_rate": 0.0,
+          "ban_rate": 0.39,
+          "maps_played": 8
+        },
+        "Overpass": {
+          "strength": 0.206,
+          "win_rate": 0.429,
+          "pick_rate": 0.0,
+          "ban_rate": 0.35,
+          "maps_played": 7
+        },
+        "Ancient": {
+          "strength": 0.569,
+          "win_rate": 0.647,
+          "pick_rate": 0.55,
+          "ban_rate": 0.02,
+          "maps_played": 17
+        },
+        "Anubis": {
+          "strength": 0.0,
+          "win_rate": 0.0,
+          "pick_rate": 0.0,
+          "ban_rate": 0.74,
+          "maps_played": 2
+        }
       }
     },
     "BetBoom": {
       "seed": 3,
-      "valve": 1575,
+      "valve": 1563,
       "hltv": 120,
-      "maps": {
-        "Dust2": 0.792,
-        "Mirage": 0.633,
-        "Inferno": 0.0,
-        "Nuke": 0.577,
-        "Overpass": 0.526,
-        "Ancient": 0.609,
-        "Anubis": 0.615
+      "map_stats": {
+        "Dust2": {
+          "strength": 0.472,
+          "win_rate": 0.75,
+          "pick_rate": 0.2,
+          "ban_rate": 0.15,
+          "maps_played": 8
+        },
+        "Mirage": {
+          "strength": 0.419,
+          "win_rate": 0.5,
+          "pick_rate": 0.35,
+          "ban_rate": 0.12,
+          "maps_played": 12
+        },
+        "Inferno": {
+          "strength": 0.0,
+          "win_rate": 0.0,
+          "pick_rate": 0.0,
+          "ban_rate": 1.0,
+          "maps_played": 0
+        },
+        "Nuke": {
+          "strength": 0.505,
+          "win_rate": 0.615,
+          "pick_rate": 0.42,
+          "ban_rate": 0.09,
+          "maps_played": 13
+        },
+        "Overpass": {
+          "strength": 0.342,
+          "win_rate": 0.545,
+          "pick_rate": 0.05,
+          "ban_rate": 0.25,
+          "maps_played": 11
+        },
+        "Ancient": {
+          "strength": 0.309,
+          "win_rate": 0.4,
+          "pick_rate": 0.18,
+          "ban_rate": 0.18,
+          "maps_played": 10
+        },
+        "Anubis": {
+          "strength": 0.457,
+          "win_rate": 0.778,
+          "pick_rate": 0.14,
+          "ban_rate": 0.23,
+          "maps_played": 9
+        }
       }
     },
     "HEROIC": {
       "seed": 4,
-      "valve": 1466,
+      "valve": 1449,
       "hltv": 69,
-      "maps": {
-        "Dust2": 0.579,
-        "Mirage": 0.5,
-        "Inferno": 0.429,
-        "Nuke": 0.65,
-        "Overpass": 0.375,
-        "Ancient": 0.444,
-        "Anubis": 0.0
+      "map_stats": {
+        "Dust2": {
+          "strength": 0.495,
+          "win_rate": 0.588,
+          "pick_rate": 0.368,
+          "ban_rate": 0.0,
+          "maps_played": 17
+        },
+        "Mirage": {
+          "strength": 0.341,
+          "win_rate": 0.455,
+          "pick_rate": 0.174,
+          "ban_rate": 0.163,
+          "maps_played": 11
+        },
+        "Inferno": {
+          "strength": 0.353,
+          "win_rate": 0.417,
+          "pick_rate": 0.2,
+          "ban_rate": 0.032,
+          "maps_played": 12
+        },
+        "Nuke": {
+          "strength": 0.618,
+          "win_rate": 0.667,
+          "pick_rate": 0.684,
+          "ban_rate": 0.0,
+          "maps_played": 15
+        },
+        "Overpass": {
+          "strength": 0.267,
+          "win_rate": 0.5,
+          "pick_rate": 0.0,
+          "ban_rate": 0.238,
+          "maps_played": 6
+        },
+        "Ancient": {
+          "strength": 0.412,
+          "win_rate": 0.8,
+          "pick_rate": 0.0,
+          "ban_rate": 0.341,
+          "maps_played": 5
+        },
+        "Anubis": {
+          "strength": 0.0,
+          "win_rate": 0.0,
+          "pick_rate": 0.0,
+          "ban_rate": 1.0,
+          "maps_played": 0
+        }
       }
     },
     "BIG": {
       "seed": 5,
-      "valve": 1423,
+      "valve": 1414,
       "hltv": 47,
-      "maps": {
-        "Dust2": 0.667,
-        "Mirage": 0.611,
-        "Inferno": 0.875,
-        "Nuke": 0.7,
-        "Overpass": 0.704,
-        "Ancient": 0.654,
-        "Anubis": 0.625
+      "map_stats": {
+        "Dust2": {
+          "strength": 0.298,
+          "win_rate": 0.5,
+          "pick_rate": 0.15,
+          "ban_rate": 0.27,
+          "maps_played": 6
+        },
+        "Mirage": {
+          "strength": 0.46,
+          "win_rate": 0.75,
+          "pick_rate": 0.07,
+          "ban_rate": 0.25,
+          "maps_played": 12
+        },
+        "Inferno": {
+          "strength": 0.495,
+          "win_rate": 0.857,
+          "pick_rate": 0.16,
+          "ban_rate": 0.28,
+          "maps_played": 7
+        },
+        "Nuke": {
+          "strength": 0.371,
+          "win_rate": 0.7,
+          "pick_rate": 0.08,
+          "ban_rate": 0.57,
+          "maps_played": 10
+        },
+        "Overpass": {
+          "strength": 0.589,
+          "win_rate": 0.7,
+          "pick_rate": 0.52,
+          "ban_rate": 0.03,
+          "maps_played": 20
+        },
+        "Ancient": {
+          "strength": 0.498,
+          "win_rate": 0.625,
+          "pick_rate": 0.36,
+          "ban_rate": 0.08,
+          "maps_played": 16
+        },
+        "Anubis": {
+          "strength": 0.284,
+          "win_rate": 0.571,
+          "pick_rate": 0.0,
+          "ban_rate": 0.35,
+          "maps_played": 7
+        }
       }
     },
     "M80": {
       "seed": 6,
-      "valve": 1388,
+      "valve": 1380,
       "hltv": 66,
-      "maps": {
-        "Dust2": 0.65,
-        "Mirage": 0.677,
-        "Inferno": 0.545,
-        "Nuke": 0.0,
-        "Overpass": 0.571,
-        "Ancient": 0.5,
-        "Anubis": 0.5
+      "map_stats": {
+        "Dust2": {
+          "strength": 0.37,
+          "win_rate": 0.583,
+          "pick_rate": 0.03,
+          "ban_rate": 0.19,
+          "maps_played": 12
+        },
+        "Mirage": {
+          "strength": 0.496,
+          "win_rate": 0.538,
+          "pick_rate": 0.53,
+          "ban_rate": 0.06,
+          "maps_played": 13
+        },
+        "Inferno": {
+          "strength": 0.502,
+          "win_rate": 0.643,
+          "pick_rate": 0.37,
+          "ban_rate": 0.12,
+          "maps_played": 14
+        },
+        "Nuke": {
+          "strength": 0.0,
+          "win_rate": 0.0,
+          "pick_rate": 0.0,
+          "ban_rate": 1.0,
+          "maps_played": 0
+        },
+        "Overpass": {
+          "strength": 0.356,
+          "win_rate": 0.667,
+          "pick_rate": 0.07,
+          "ban_rate": 0.34,
+          "maps_played": 6
+        },
+        "Ancient": {
+          "strength": 0.146,
+          "win_rate": 0.143,
+          "pick_rate": 0.22,
+          "ban_rate": 0.14,
+          "maps_played": 7
+        },
+        "Anubis": {
+          "strength": 0.316,
+          "win_rate": 0.5,
+          "pick_rate": 0.13,
+          "ban_rate": 0.16,
+          "maps_played": 6
+        }
       }
     },
     "MIBR": {
       "seed": 7,
-      "valve": 1556,
+      "valve": 1546,
       "hltv": 52,
-      "maps": {
-        "Dust2": 0.0,
-        "Mirage": 0.619,
-        "Inferno": 0.692,
-        "Nuke": 0.556,
-        "Overpass": 0.455,
-        "Ancient": 0.765,
-        "Anubis": 0.9
+      "map_stats": {
+        "Dust2": {
+          "strength": 0.0,
+          "win_rate": 0.0,
+          "pick_rate": 0.0,
+          "ban_rate": 1.0,
+          "maps_played": 0
+        },
+        "Mirage": {
+          "strength": 0.466,
+          "win_rate": 0.6,
+          "pick_rate": 0.29,
+          "ban_rate": 0.08,
+          "maps_played": 10
+        },
+        "Inferno": {
+          "strength": 0.548,
+          "win_rate": 0.667,
+          "pick_rate": 0.62,
+          "ban_rate": 0.07,
+          "maps_played": 6
+        },
+        "Nuke": {
+          "strength": 0.2,
+          "win_rate": 0.333,
+          "pick_rate": 0.05,
+          "ban_rate": 0.18,
+          "maps_played": 6
+        },
+        "Overpass": {
+          "strength": 0.081,
+          "win_rate": 0.167,
+          "pick_rate": 0.02,
+          "ban_rate": 0.28,
+          "maps_played": 6
+        },
+        "Ancient": {
+          "strength": 0.486,
+          "win_rate": 0.714,
+          "pick_rate": 0.26,
+          "ban_rate": 0.06,
+          "maps_played": 7
+        },
+        "Anubis": {
+          "strength": 0.525,
+          "win_rate": 0.8,
+          "pick_rate": 0.25,
+          "ban_rate": 0.09,
+          "maps_played": 5
+        }
       }
     },
     "SINNERS": {
       "seed": 8,
-      "valve": 1390,
+      "valve": 1381,
       "hltv": 58,
-      "maps": {
-        "Dust2": 0.545,
-        "Mirage": 0.64,
-        "Inferno": 0.5,
-        "Nuke": 0.474,
-        "Overpass": 0.8,
-        "Ancient": 0.667,
-        "Anubis": 0.0
+      "map_stats": {
+        "Dust2": {
+          "strength": 0.361,
+          "win_rate": 0.444,
+          "pick_rate": 0.41,
+          "ban_rate": 0.13,
+          "maps_played": 9
+        },
+        "Mirage": {
+          "strength": 0.475,
+          "win_rate": 0.538,
+          "pick_rate": 0.42,
+          "ban_rate": 0.03,
+          "maps_played": 13
+        },
+        "Inferno": {
+          "strength": 0.103,
+          "win_rate": 0.2,
+          "pick_rate": 0.07,
+          "ban_rate": 0.32,
+          "maps_played": 5
+        },
+        "Nuke": {
+          "strength": 0.393,
+          "win_rate": 0.5,
+          "pick_rate": 0.23,
+          "ban_rate": 0.1,
+          "maps_played": 10
+        },
+        "Overpass": {
+          "strength": 0.526,
+          "win_rate": 0.889,
+          "pick_rate": 0.14,
+          "ban_rate": 0.19,
+          "maps_played": 9
+        },
+        "Ancient": {
+          "strength": 0.394,
+          "win_rate": 0.714,
+          "pick_rate": 0.03,
+          "ban_rate": 0.23,
+          "maps_played": 7
+        },
+        "Anubis": {
+          "strength": 0.0,
+          "win_rate": 0.0,
+          "pick_rate": 0.0,
+          "ban_rate": 1.0,
+          "maps_played": 0
+        }
       }
     },
     "NRG": {
       "seed": 9,
-      "valve": 1292,
+      "valve": 1276,
       "hltv": 41,
-      "maps": {
-        "Dust2": 0.333,
-        "Mirage": 0.7,
-        "Inferno": 0.533,
-        "Nuke": 0.167,
-        "Overpass": 0.333,
-        "Ancient": 0.583,
-        "Anubis": 0.0
+      "map_stats": {
+        "Dust2": {
+          "strength": 0.0,
+          "win_rate": 0.0,
+          "pick_rate": 0.0,
+          "ban_rate": 0.619,
+          "maps_played": 3
+        },
+        "Mirage": {
+          "strength": 0.415,
+          "win_rate": 0.571,
+          "pick_rate": 0.308,
+          "ban_rate": 0.08,
+          "maps_played": 7
+        },
+        "Inferno": {
+          "strength": 0.429,
+          "win_rate": 0.5,
+          "pick_rate": 0.5,
+          "ban_rate": 0.053,
+          "maps_played": 6
+        },
+        "Nuke": {
+          "strength": 0.076,
+          "win_rate": 0.111,
+          "pick_rate": 0.083,
+          "ban_rate": 0.227,
+          "maps_played": 9
+        },
+        "Overpass": {
+          "strength": 0.0,
+          "win_rate": 0.0,
+          "pick_rate": 0.0,
+          "ban_rate": 0.364,
+          "maps_played": 2
+        },
+        "Ancient": {
+          "strength": 0.391,
+          "win_rate": 0.5,
+          "pick_rate": 0.385,
+          "ban_rate": 0.1,
+          "maps_played": 8
+        },
+        "Anubis": {
+          "strength": 0.0,
+          "win_rate": 0.0,
+          "pick_rate": 0.091,
+          "ban_rate": 0.167,
+          "maps_played": 2
+        }
       }
     },
     "TYLOO": {
       "seed": 10,
-      "valve": 1391,
+      "valve": 1390,
       "hltv": 47,
-      "maps": {
-        "Dust2": 0.0,
-        "Mirage": 0.857,
-        "Inferno": 0.667,
-        "Nuke": 0.769,
-        "Overpass": 0.7,
-        "Ancient": 0.474,
-        "Anubis": 0.5
+      "map_stats": {
+        "Dust2": {
+          "strength": 0.0,
+          "win_rate": 0.0,
+          "pick_rate": 0.0,
+          "ban_rate": 1.0,
+          "maps_played": 0
+        },
+        "Mirage": {
+          "strength": 0.654,
+          "win_rate": 0.842,
+          "pick_rate": 0.48,
+          "ban_rate": 0.047,
+          "maps_played": 19
+        },
+        "Inferno": {
+          "strength": 0.56,
+          "win_rate": 0.692,
+          "pick_rate": 0.44,
+          "ban_rate": 0.054,
+          "maps_played": 13
+        },
+        "Nuke": {
+          "strength": 0.511,
+          "win_rate": 0.8,
+          "pick_rate": 0.105,
+          "ban_rate": 0.175,
+          "maps_played": 10
+        },
+        "Overpass": {
+          "strength": 0.424,
+          "win_rate": 0.625,
+          "pick_rate": 0.16,
+          "ban_rate": 0.0,
+          "maps_played": 8
+        },
+        "Ancient": {
+          "strength": 0.276,
+          "win_rate": 0.444,
+          "pick_rate": 0.0,
+          "ban_rate": 0.243,
+          "maps_played": 18
+        },
+        "Anubis": {
+          "strength": 0.133,
+          "win_rate": 0.5,
+          "pick_rate": 0.0,
+          "ban_rate": 0.31,
+          "maps_played": 2
+        }
       }
     },
     "Gaimin Gladiators": {
       "seed": 11,
-      "valve": 1249,
+      "valve": 1239,
       "hltv": 24,
-      "maps": {
-        "Dust2": 0.55,
-        "Mirage": 0.0,
-        "Inferno": 0.333,
-        "Nuke": 0.375,
-        "Overpass": 0.6,
-        "Ancient": 0.667,
-        "Anubis": 0.0
+      "map_stats": {
+        "Dust2": {
+          "strength": 0.513,
+          "win_rate": 0.467,
+          "pick_rate": 0.73,
+          "ban_rate": 0.03,
+          "maps_played": 15
+        },
+        "Mirage": {
+          "strength": 0.0,
+          "win_rate": 0.0,
+          "pick_rate": 0.0,
+          "ban_rate": 0.87,
+          "maps_played": 2
+        },
+        "Inferno": {
+          "strength": 0.38,
+          "win_rate": 0.6,
+          "pick_rate": 0.19,
+          "ban_rate": 0.19,
+          "maps_played": 5
+        },
+        "Nuke": {
+          "strength": 0.244,
+          "win_rate": 0.333,
+          "pick_rate": 0.05,
+          "ban_rate": 0.16,
+          "maps_played": 12
+        },
+        "Overpass": {
+          "strength": 0.291,
+          "win_rate": 0.5,
+          "pick_rate": 0.16,
+          "ban_rate": 0.12,
+          "maps_played": 4
+        },
+        "Ancient": {
+          "strength": 0.407,
+          "win_rate": 0.625,
+          "pick_rate": 0.14,
+          "ban_rate": 0.06,
+          "maps_played": 8
+        },
+        "Anubis": {
+          "strength": 0.0,
+          "win_rate": 0.0,
+          "pick_rate": 0.0,
+          "ban_rate": 0.38,
+          "maps_played": 0
+        }
       }
     },
     "Sharks": {
       "seed": 12,
-      "valve": 1307,
+      "valve": 1284,
       "hltv": 19,
-      "maps": {
-        "Dust2": 1.0,
-        "Mirage": 0.625,
-        "Inferno": 0.56,
-        "Nuke": 0.719,
-        "Overpass": 0.438,
-        "Ancient": 0.5,
-        "Anubis": 0.857
+      "map_stats": {
+        "Dust2": {
+          "strength": 0.0,
+          "win_rate": 0.0,
+          "pick_rate": 0.0,
+          "ban_rate": 1.0,
+          "maps_played": 0
+        },
+        "Mirage": {
+          "strength": 0.395,
+          "win_rate": 0.667,
+          "pick_rate": 0.071,
+          "ban_rate": 0.148,
+          "maps_played": 6
+        },
+        "Inferno": {
+          "strength": 0.148,
+          "win_rate": 0.5,
+          "pick_rate": 0.077,
+          "ban_rate": 0.333,
+          "maps_played": 2
+        },
+        "Nuke": {
+          "strength": 0.613,
+          "win_rate": 0.733,
+          "pick_rate": 0.52,
+          "ban_rate": 0.0,
+          "maps_played": 15
+        },
+        "Overpass": {
+          "strength": 0.218,
+          "win_rate": 0.375,
+          "pick_rate": 0.0,
+          "ban_rate": 0.143,
+          "maps_played": 8
+        },
+        "Ancient": {
+          "strength": 0.416,
+          "win_rate": 0.556,
+          "pick_rate": 0.312,
+          "ban_rate": 0.037,
+          "maps_played": 9
+        },
+        "Anubis": {
+          "strength": 0.412,
+          "win_rate": 0.75,
+          "pick_rate": 0.12,
+          "ban_rate": 0.15,
+          "maps_played": 4
+        }
       }
     },
     "Liquid": {
       "seed": 13,
-      "valve": 1325,
+      "valve": 1312,
       "hltv": 62,
-      "maps": {
-        "Dust2": 0.286,
-        "Mirage": 0.529,
-        "Inferno": 0.533,
-        "Nuke": 0.389,
-        "Overpass": 0.0,
-        "Ancient": 0.294,
-        "Anubis": 0.333
+      "map_stats": {
+        "Dust2": {
+          "strength": 0.297,
+          "win_rate": 0.333,
+          "pick_rate": 0.278,
+          "ban_rate": 0.176,
+          "maps_played": 12
+        },
+        "Mirage": {
+          "strength": 0.441,
+          "win_rate": 0.556,
+          "pick_rate": 0.438,
+          "ban_rate": 0.074,
+          "maps_played": 9
+        },
+        "Inferno": {
+          "strength": 0.325,
+          "win_rate": 0.5,
+          "pick_rate": 0.067,
+          "ban_rate": 0.235,
+          "maps_played": 10
+        },
+        "Nuke": {
+          "strength": 0.259,
+          "win_rate": 0.25,
+          "pick_rate": 0.25,
+          "ban_rate": 0.107,
+          "maps_played": 12
+        },
+        "Overpass": {
+          "strength": 0.0,
+          "win_rate": 0.0,
+          "pick_rate": 0.0,
+          "ban_rate": 1.0,
+          "maps_played": 0
+        },
+        "Ancient": {
+          "strength": 0.275,
+          "win_rate": 0.286,
+          "pick_rate": 0.25,
+          "ban_rate": 0.125,
+          "maps_played": 14
+        },
+        "Anubis": {
+          "strength": 0.16,
+          "win_rate": 0.5,
+          "pick_rate": 0.059,
+          "ban_rate": 0.25,
+          "maps_played": 2
+        }
       }
     },
     "Lynn Vision": {
       "seed": 14,
-      "valve": 1436,
+      "valve": 1441,
       "hltv": 24,
-      "maps": {
-        "Dust2": 0.76,
-        "Mirage": 0.0,
-        "Inferno": 0.778,
-        "Nuke": 0.636,
-        "Overpass": 0.5,
-        "Ancient": 0.588,
-        "Anubis": 0.6
+      "map_stats": {
+        "Dust2": {
+          "strength": 0.712,
+          "win_rate": 0.789,
+          "pick_rate": 0.84,
+          "ban_rate": 0.06,
+          "maps_played": 19
+        },
+        "Mirage": {
+          "strength": 0.0,
+          "win_rate": 0.0,
+          "pick_rate": 0.0,
+          "ban_rate": 1.0,
+          "maps_played": 0
+        },
+        "Inferno": {
+          "strength": 0.525,
+          "win_rate": 0.857,
+          "pick_rate": 0.19,
+          "ban_rate": 0.17,
+          "maps_played": 7
+        },
+        "Nuke": {
+          "strength": 0.456,
+          "win_rate": 0.714,
+          "pick_rate": 0.18,
+          "ban_rate": 0.11,
+          "maps_played": 7
+        },
+        "Overpass": {
+          "strength": 0.173,
+          "win_rate": 0.5,
+          "pick_rate": 0.04,
+          "ban_rate": 0.16,
+          "maps_played": 2
+        },
+        "Ancient": {
+          "strength": 0.437,
+          "win_rate": 0.667,
+          "pick_rate": 0.05,
+          "ban_rate": 0.11,
+          "maps_played": 12
+        },
+        "Anubis": {
+          "strength": 0.311,
+          "win_rate": 0.667,
+          "pick_rate": 0.0,
+          "ban_rate": 0.28,
+          "maps_played": 3
+        }
       }
     },
     "THUNDER dOWNUNDER": {
       "seed": 15,
-      "valve": 1218,
+      "valve": 1211,
       "hltv": 12,
-      "maps": {
-        "Dust2": 0.733,
-        "Mirage": 0.75,
-        "Inferno": 0.76,
-        "Nuke": 0.846,
-        "Overpass": 0.625,
-        "Ancient": 0.545,
-        "Anubis": 0.824
+      "map_stats": {
+        "Dust2": {
+          "strength": 0.408,
+          "win_rate": 0.714,
+          "pick_rate": 0.03,
+          "ban_rate": 0.16,
+          "maps_played": 7
+        },
+        "Mirage": {
+          "strength": 0.0,
+          "win_rate": 0.0,
+          "pick_rate": 0.0,
+          "ban_rate": 1.0,
+          "maps_played": 0
+        },
+        "Inferno": {
+          "strength": 0.556,
+          "win_rate": 0.688,
+          "pick_rate": 0.4,
+          "ban_rate": 0.01,
+          "maps_played": 16
+        },
+        "Nuke": {
+          "strength": 0.642,
+          "win_rate": 0.8,
+          "pick_rate": 0.51,
+          "ban_rate": 0.03,
+          "maps_played": 15
+        },
+        "Overpass": {
+          "strength": 0.137,
+          "win_rate": 0.333,
+          "pick_rate": 0.0,
+          "ban_rate": 0.23,
+          "maps_played": 3
+        },
+        "Ancient": {
+          "strength": 0.285,
+          "win_rate": 0.5,
+          "pick_rate": 0.0,
+          "ban_rate": 0.15,
+          "maps_played": 8
+        },
+        "Anubis": {
+          "strength": 0.563,
+          "win_rate": 0.812,
+          "pick_rate": 0.32,
+          "ban_rate": 0.22,
+          "maps_played": 16
+        }
       }
     },
     "FlyQuest": {
       "seed": 16,
-      "valve": 1129,
+      "valve": 1132,
       "hltv": 17,
-      "maps": {
-        "Dust2": 0.769,
-        "Mirage": 0.571,
-        "Inferno": 0.6,
-        "Nuke": 0.333,
-        "Overpass": 0.333,
-        "Ancient": 0.667,
-        "Anubis": 0.917
+      "map_stats": {
+        "Dust2": {
+          "strength": 0.545,
+          "win_rate": 0.7,
+          "pick_rate": 0.4,
+          "ban_rate": 0.1,
+          "maps_played": 10
+        },
+        "Mirage": {
+          "strength": 0.354,
+          "win_rate": 0.6,
+          "pick_rate": 0.12,
+          "ban_rate": 0.23,
+          "maps_played": 5
+        },
+        "Inferno": {
+          "strength": 0.213,
+          "win_rate": 0.5,
+          "pick_rate": 0.12,
+          "ban_rate": 0.06,
+          "maps_played": 2
+        },
+        "Nuke": {
+          "strength": 0.166,
+          "win_rate": 0.333,
+          "pick_rate": 0.09,
+          "ban_rate": 0.4,
+          "maps_played": 6
+        },
+        "Overpass": {
+          "strength": 0.0,
+          "win_rate": 0.0,
+          "pick_rate": 0.0,
+          "ban_rate": 0.37,
+          "maps_played": 1
+        },
+        "Ancient": {
+          "strength": 0.101,
+          "win_rate": 0.333,
+          "pick_rate": 0.0,
+          "ban_rate": 0.41,
+          "maps_played": 3
+        },
+        "Anubis": {
+          "strength": 0.805,
+          "win_rate": 0.9,
+          "pick_rate": 0.92,
+          "ban_rate": 0.0,
+          "maps_played": 10
+        }
       }
     }
   }
