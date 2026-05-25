@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import random
+from math import exp
 
 from config import (
+    DEFAULT_MAP_ADJUSTMENT_WEIGHT,
     DEFAULT_MAP_POOL as CONFIG_DEFAULT_MAP_POOL,
+    DEFAULT_VETO_TEMPERATURE,
+    ModelParams,
     PROBABILITY_CEILING,
     PROBABILITY_FLOOR,
     Team,
@@ -15,7 +19,7 @@ from config import (
 
 
 DEFAULT_MAP_POOL = CONFIG_DEFAULT_MAP_POOL
-MAP_ADJUSTMENT_WEIGHT = 0.20
+MAP_ADJUSTMENT_WEIGHT = DEFAULT_MAP_ADJUSTMENT_WEIGHT
 MAX_MAP_ADJUSTMENT = 0.08
 VETO_HISTORY_WEIGHT = 0.80
 VETO_ADVANTAGE_WEIGHT = 0.20
@@ -42,11 +46,13 @@ def map_win_probability(
     map_name: str,
     sigma: tuple[float, ...],
     weights: tuple[float, ...] | None,
+    model_params: ModelParams | None = None,
 ) -> float:
     """Calculate team_a's map win probability with a capped map-pool adjustment."""
+    params = model_params or ModelParams()
     base_prob = win_probability(team_a, team_b, sigma, weights=weights)
     map_diff = map_strength(team_a, map_name) - map_strength(team_b, map_name)
-    adjustment = map_diff * MAP_ADJUSTMENT_WEIGHT
+    adjustment = map_diff * params.map_adjustment_weight
     adjustment = min(max(adjustment, -MAX_MAP_ADJUSTMENT), MAX_MAP_ADJUSTMENT)
     return clamp_probability(
         base_prob + adjustment,
@@ -93,20 +99,55 @@ def _lower_seed_team(team_a: Team, team_b: Team) -> Team:
     return max((team_a, team_b), key=lambda team: (team.seed, team.id))
 
 
+def _deterministic_choice(candidates: list[str], score_fn) -> str:
+    return min(candidates, key=lambda map_name: (-score_fn(map_name), map_name))
+
+
+def _softmax_choice(
+    candidates: list[str],
+    score_fn,
+    rng: random.Random,
+    temperature: float,
+) -> str:
+    if not candidates:
+        raise ValueError("Cannot choose from an empty map candidate list")
+    if temperature <= 0:
+        return _deterministic_choice(candidates, score_fn)
+
+    ordered_candidates = sorted(candidates)
+    scores = [score_fn(map_name) for map_name in ordered_candidates]
+    max_score = max(scores)
+    weights = [exp((score - max_score) / temperature) for score in scores]
+    total_weight = sum(weights)
+    threshold = rng.random() * total_weight
+
+    cumulative = 0.0
+    for map_name, weight in zip(ordered_candidates, weights):
+        cumulative += weight
+        if threshold <= cumulative:
+            return map_name
+    return ordered_candidates[-1]
+
+
+def _first_ban_candidates(team: Team, available_maps: list[str]) -> list[str]:
+    if not available_maps:
+        return []
+    highest_ban_rate = max(map_ban_rate(team, map_name) for map_name in available_maps)
+    if highest_ban_rate <= 0:
+        return []
+    return [
+        map_name
+        for map_name in available_maps
+        if map_ban_rate(team, map_name) == highest_ban_rate
+    ]
+
+
 def _first_ban_map(team: Team, opponent: Team, available_maps: list[str]) -> str | None:
     """Return the first-ban priority inferred from the highest configured ban rate."""
-    if not available_maps:
+    candidates = _first_ban_candidates(team, available_maps)
+    if not candidates:
         return None
-
-    selected = min(
-        available_maps,
-        key=lambda map_name: (
-            -map_ban_rate(team, map_name),
-            -_ban_score(team, opponent, map_name),
-            map_name,
-        ),
-    )
-    return selected if map_ban_rate(team, selected) > 0 else None
+    return _deterministic_choice(candidates, lambda map_name: _ban_score(team, opponent, map_name))
 
 
 def _shared_first_ban_map(team_a: Team, team_b: Team, available_maps: list[str]) -> str | None:
@@ -138,9 +179,12 @@ def _remove_bans(
     team: Team,
     opponent: Team,
     count: int,
+    rng: random.Random | None = None,
+    veto_temperature: float = DEFAULT_VETO_TEMPERATURE,
     use_first_ban: bool = False,
     shared_first_ban: str | None = None,
 ) -> None:
+    chooser_rng = rng or random.Random(0)
     protected_maps = set()
     if shared_first_ban and team != _lower_seed_team(team, opponent):
         protected_maps.add(shared_first_ban)
@@ -148,12 +192,29 @@ def _remove_bans(
     for index in range(count):
         selected = None
         if use_first_ban and index == 0:
-            first_ban = _first_ban_map(team, opponent, available_maps)
-            if first_ban and first_ban not in protected_maps:
-                selected = first_ban
+            first_ban_candidates = [
+                map_name
+                for map_name in _first_ban_candidates(team, available_maps)
+                if map_name not in protected_maps
+            ]
+            if first_ban_candidates:
+                selected = _softmax_choice(
+                    first_ban_candidates,
+                    lambda map_name: _ban_score(team, opponent, map_name),
+                    chooser_rng,
+                    veto_temperature,
+                )
 
         if selected is None:
-            selected = _best_ban_by_score(available_maps, team, opponent, protected_maps)
+            candidates = [map_name for map_name in available_maps if map_name not in protected_maps]
+            if not candidates:
+                candidates = available_maps
+            selected = _softmax_choice(
+                candidates,
+                lambda map_name: _ban_score(team, opponent, map_name),
+                chooser_rng,
+                veto_temperature,
+            )
 
         available_maps.remove(selected)
 
@@ -162,17 +223,29 @@ def _pick_map(
     available_maps: list[str],
     team: Team,
     opponent: Team,
+    rng: random.Random | None = None,
+    veto_temperature: float = DEFAULT_VETO_TEMPERATURE,
 ) -> str:
-    selected = min(
+    selected = _softmax_choice(
         available_maps,
-        key=lambda map_name: (-_pick_score(team, opponent, map_name), map_name),
+        lambda map_name: _pick_score(team, opponent, map_name),
+        rng or random.Random(0),
+        veto_temperature,
     )
     available_maps.remove(selected)
     return selected
 
 
-def bo1_veto_maps(team_a: Team, team_b: Team, map_pool: tuple[str, ...]) -> str:
+def bo1_veto_maps(
+    team_a: Team,
+    team_b: Team,
+    map_pool: tuple[str, ...],
+    rng: random.Random | None = None,
+    model_params: ModelParams | None = None,
+) -> str:
     """Simulate the Major BO1 veto flow and return the remaining map."""
+    params = model_params or ModelParams()
+    chooser_rng = rng or random.Random(0)
     role_a, role_b = choose_team_roles(team_a, team_b)
     available_maps = _validate_veto_map_pool(map_pool)
     shared_first_ban = _shared_first_ban_map(role_a, role_b, available_maps)
@@ -182,6 +255,8 @@ def bo1_veto_maps(team_a: Team, team_b: Team, map_pool: tuple[str, ...]) -> str:
         role_a,
         role_b,
         2,
+        chooser_rng,
+        params.veto_temperature,
         use_first_ban=True,
         shared_first_ban=shared_first_ban,
     )
@@ -190,18 +265,28 @@ def bo1_veto_maps(team_a: Team, team_b: Team, map_pool: tuple[str, ...]) -> str:
         role_b,
         role_a,
         3,
+        chooser_rng,
+        params.veto_temperature,
         use_first_ban=True,
         shared_first_ban=shared_first_ban,
     )
-    _remove_bans(available_maps, role_a, role_b, 1)
+    _remove_bans(available_maps, role_a, role_b, 1, chooser_rng, params.veto_temperature)
 
     if len(available_maps) != 1:
         raise ValueError("BO1 veto did not resolve to exactly one map")
     return available_maps[0]
 
 
-def bo3_veto_maps(team_a: Team, team_b: Team, map_pool: tuple[str, ...]) -> tuple[str, str, str]:
+def bo3_veto_maps(
+    team_a: Team,
+    team_b: Team,
+    map_pool: tuple[str, ...],
+    rng: random.Random | None = None,
+    model_params: ModelParams | None = None,
+) -> tuple[str, str, str]:
     """Simulate the Major BO3 veto flow and return map1, map2, and decider."""
+    params = model_params or ModelParams()
+    chooser_rng = rng or random.Random(0)
     role_a, role_b = choose_team_roles(team_a, team_b)
     available_maps = _validate_veto_map_pool(map_pool)
     shared_first_ban = _shared_first_ban_map(role_a, role_b, available_maps)
@@ -211,6 +296,8 @@ def bo3_veto_maps(team_a: Team, team_b: Team, map_pool: tuple[str, ...]) -> tupl
         role_a,
         role_b,
         1,
+        chooser_rng,
+        params.veto_temperature,
         use_first_ban=True,
         shared_first_ban=shared_first_ban,
     )
@@ -219,13 +306,15 @@ def bo3_veto_maps(team_a: Team, team_b: Team, map_pool: tuple[str, ...]) -> tupl
         role_b,
         role_a,
         1,
+        chooser_rng,
+        params.veto_temperature,
         use_first_ban=True,
         shared_first_ban=shared_first_ban,
     )
-    map1 = _pick_map(available_maps, role_a, role_b)
-    map2 = _pick_map(available_maps, role_b, role_a)
-    _remove_bans(available_maps, role_b, role_a, 1)
-    _remove_bans(available_maps, role_a, role_b, 1)
+    map1 = _pick_map(available_maps, role_a, role_b, chooser_rng, params.veto_temperature)
+    map2 = _pick_map(available_maps, role_b, role_a, chooser_rng, params.veto_temperature)
+    _remove_bans(available_maps, role_b, role_a, 1, chooser_rng, params.veto_temperature)
+    _remove_bans(available_maps, role_a, role_b, 1, chooser_rng, params.veto_temperature)
 
     if len(available_maps) != 1:
         raise ValueError("BO3 veto did not resolve to exactly one decider map")
@@ -239,10 +328,11 @@ def simulate_bo1_with_veto(
     sigma: tuple[float, ...],
     weights: tuple[float, ...] | None,
     rng: random.Random,
+    model_params: ModelParams | None = None,
 ) -> bool:
     """Simulate a BO1 after veto and return whether the input team_a wins."""
-    map_name = bo1_veto_maps(team_a, team_b, map_pool)
-    probability = map_win_probability(team_a, team_b, map_name, sigma, weights)
+    map_name = bo1_veto_maps(team_a, team_b, map_pool, rng, model_params)
+    probability = map_win_probability(team_a, team_b, map_name, sigma, weights, model_params)
     return probability > rng.random()
 
 
@@ -253,13 +343,14 @@ def simulate_bo3_with_veto(
     sigma: tuple[float, ...],
     weights: tuple[float, ...] | None,
     rng: random.Random,
+    model_params: ModelParams | None = None,
 ) -> bool:
     """Simulate a BO3 over the vetoed maps and return whether the input team_a wins."""
     team_a_maps_won = 0
     team_b_maps_won = 0
 
-    for map_name in bo3_veto_maps(team_a, team_b, map_pool):
-        probability = map_win_probability(team_a, team_b, map_name, sigma, weights)
+    for map_name in bo3_veto_maps(team_a, team_b, map_pool, rng, model_params):
+        probability = map_win_probability(team_a, team_b, map_name, sigma, weights, model_params)
         if probability > rng.random():
             team_a_maps_won += 1
         else:

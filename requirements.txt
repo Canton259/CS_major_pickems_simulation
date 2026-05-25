@@ -1,9 +1,10 @@
-# 当前项目只依赖 Python 标准库，无第三方运行时依赖。
+# Runtime/development dependencies for optional tools.
+# Recommended Python version: Python >= 3.10
 #
-# 推荐 Python 版本：Python >= 3.10
-#
-# 说明：
-# - argparse、csv、json、multiprocessing、pathlib、random、unittest 等均为标准库。
-# - 如果后续引入第三方库，再在此文件中补充对应依赖。
+# The simulator itself mainly uses the standard library.
+# NumPy/Numba support greedy exhaustive search acceleration.
+# Playwright is only required for `python backtest.py fetch`.
+
 numpy>=1.24
 numba>=0.57
+playwright>=1.44

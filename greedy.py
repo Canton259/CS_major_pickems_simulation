@@ -21,7 +21,7 @@ from typing import Dict, List, Tuple
 from config import Team, load_tournament_config, win_probability
 
 
-DEFAULT_RESULTS_FILE = "0.5000_0.5000_600.0000_1600.0000.txt"
+DEFAULT_RESULTS_FILE = "0.7000_0.3000_600.0000_1600.0000.txt"
 PICK_KEYS = ("3-0", "3-1/3-2", "0-3")
 PICK_GROUP_SIZES = {
     "3-0": 2,

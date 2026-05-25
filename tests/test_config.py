@@ -3,7 +3,18 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from config import HLTV_WEIGHT, Team, VRS_WEIGHT, load_tournament_config, win_probability
+from config import (
+    DEFAULT_BAYES_PRIOR_MAPS,
+    DEFAULT_MAP_ADJUSTMENT_WEIGHT,
+    DEFAULT_VETO_TEMPERATURE,
+    HLTV_WEIGHT,
+    Team,
+    VRS_WEIGHT,
+    bayesian_win_rate,
+    load_tournament_config,
+    map_strength_from_stats,
+    win_probability,
+)
 from maps import DEFAULT_MAP_POOL
 
 
@@ -58,6 +69,36 @@ class ConfigLoadingTests(unittest.TestCase):
 
         self.assertEqual(tournament.map_pool, DEFAULT_MAP_POOL)
 
+    def test_missing_model_params_use_defaults(self) -> None:
+        tournament = load_from_temp(make_config())
+
+        self.assertEqual(tournament.model_params.map_adjustment_weight, DEFAULT_MAP_ADJUSTMENT_WEIGHT)
+        self.assertEqual(tournament.model_params.veto_temperature, DEFAULT_VETO_TEMPERATURE)
+        self.assertEqual(tournament.model_params.bayes_prior_maps, DEFAULT_BAYES_PRIOR_MAPS)
+
+    def test_model_params_can_be_configured(self) -> None:
+        config_data = make_config()
+        config_data["model_params"] = {
+            "map_adjustment_weight": 0.12,
+            "veto_temperature": 0.05,
+            "bayes_prior_maps": 10,
+        }
+
+        tournament = load_from_temp(config_data)
+
+        self.assertEqual(tournament.model_params.map_adjustment_weight, 0.12)
+        self.assertEqual(tournament.model_params.veto_temperature, 0.05)
+        self.assertEqual(tournament.model_params.bayes_prior_maps, 10.0)
+
+    def test_model_params_must_be_non_negative(self) -> None:
+        for field_name in ("map_adjustment_weight", "veto_temperature", "bayes_prior_maps"):
+            with self.subTest(field_name=field_name):
+                config_data = make_config()
+                config_data["model_params"] = {field_name: -0.01}
+
+                with self.assertRaisesRegex(ValueError, f"model_params.{field_name}"):
+                    load_from_temp(config_data)
+
     def test_missing_team_map_stats_default_to_neutral_strengths_and_zero_history(self) -> None:
         tournament = load_from_temp(make_config())
 
@@ -84,7 +125,10 @@ class ConfigLoadingTests(unittest.TestCase):
         tournament = load_from_temp(config_data)
 
         self.assertEqual(tournament.map_pool, ("Dust2", "Mirage", "Inferno"))
-        self.assertEqual(tournament.teams[0].map_strengths["Dust2"], 0.61)
+        self.assertAlmostEqual(
+            tournament.teams[0].map_strengths["Dust2"],
+            map_strength_from_stats(0.66, 13, 0.22, 0.33),
+        )
         self.assertEqual(tournament.teams[0].map_win_rates["Dust2"], 0.66)
         self.assertEqual(tournament.teams[0].map_pick_rates["Dust2"], 0.22)
         self.assertEqual(tournament.teams[0].map_ban_rates["Dust2"], 0.33)
@@ -137,6 +181,18 @@ class ConfigLoadingTests(unittest.TestCase):
         self.assertEqual(tournament.teams[0].map_pick_rates["Dust2"], 0.0)
         self.assertEqual(tournament.teams[0].map_ban_rates["Dust2"], 1.0)
         self.assertEqual(tournament.teams[0].map_played_counts["Dust2"], 0)
+
+    def test_bayesian_map_strength_shrinks_small_samples(self) -> None:
+        raw_strength = map_strength_from_stats(1.0, 2, 0.0, 0.0, bayes_prior_maps=0)
+        shrunk_strength = map_strength_from_stats(1.0, 2, 0.0, 0.0, bayes_prior_maps=5)
+
+        self.assertLess(shrunk_strength, raw_strength)
+        self.assertAlmostEqual(bayesian_win_rate(1.0, 2, 5), (2 + 2.5) / 7)
+
+    def test_missing_map_strength_stays_zero_after_bayes(self) -> None:
+        strength = map_strength_from_stats(0.0, 0, 0.0, 1.0, bayes_prior_maps=5, missing=True)
+
+        self.assertEqual(strength, 0.0)
 
     def test_invalid_map_strength_raises_clear_error(self) -> None:
         for value in (-0.01, 1.01):

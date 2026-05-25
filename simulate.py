@@ -21,6 +21,7 @@ import random
 from time import perf_counter_ns
 
 from config import (
+    ModelParams,
     Team,
     TournamentConfig,
     load_tournament_config,
@@ -156,6 +157,7 @@ class SwissSystem:
     remaining: set[Team]
     rng: random.Random
     map_pool: tuple[str, ...] = DEFAULT_MAP_POOL
+    model_params: ModelParams = ModelParams()
 
     def seeding(self, team: Team) -> tuple[int, int, int]:
         """
@@ -195,6 +197,7 @@ class SwissSystem:
                 self.sigma,
                 self.weights,
                 self.rng,
+                self.model_params,
             )
         else:
             team_a_win = simulate_bo1_with_veto(
@@ -204,6 +207,7 @@ class SwissSystem:
                 self.sigma,
                 self.weights,
                 self.rng,
+                self.model_params,
             )
 
         if team_a_win:
@@ -382,6 +386,7 @@ class Simulation:
         self.sigma = self.tournament.sigma
         self.weights = self.tournament.weights
         self.map_pool = self.tournament.map_pool
+        self.model_params = self.tournament.model_params
         self.teams = self.tournament.teams
 
     def batch(self, n: int, seed: int | None = None) -> SimulationSummary:
@@ -401,6 +406,7 @@ class Simulation:
                 remaining=set(self.teams),
                 rng=rng,
                 map_pool=self.map_pool,
+                model_params=self.model_params,
             )
             swiss.simulate_tournament()
 

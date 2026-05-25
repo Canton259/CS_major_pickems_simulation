@@ -21,6 +21,8 @@ Thumbs.db
 !requirements.txt
 !README.md
 !LICENSE
+.cache/
+fitted_params.json
 
 # 本地 smoke test 输出
 test_result.jsonl

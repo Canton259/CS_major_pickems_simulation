@@ -1,7 +1,7 @@
 import random
 import unittest
 
-from config import Team, win_probability
+from config import ModelParams, Team, win_probability
 from maps import (
     DEFAULT_MAP_POOL,
     MAP_ADJUSTMENT_WEIGHT,
@@ -76,7 +76,7 @@ class VetoTests(unittest.TestCase):
         team_b = make_team(2, "B", 2, picks={"Dust2": 0.9})
         available_maps = list(DEFAULT_MAP_POOL)
 
-        _remove_bans(available_maps, team_a, team_b, 1, use_first_ban=True)
+        _remove_bans(available_maps, team_a, team_b, 1, veto_temperature=0, use_first_ban=True)
 
         self.assertNotIn("Ancient", available_maps)
         self.assertIn("Dust2", available_maps)
@@ -92,6 +92,7 @@ class VetoTests(unittest.TestCase):
             high_seed,
             low_seed,
             1,
+            veto_temperature=0,
             use_first_ban=True,
             shared_first_ban=shared_first_ban,
         )
@@ -102,6 +103,7 @@ class VetoTests(unittest.TestCase):
             low_seed,
             high_seed,
             1,
+            veto_temperature=0,
             use_first_ban=True,
             shared_first_ban=shared_first_ban,
         )
@@ -112,7 +114,7 @@ class VetoTests(unittest.TestCase):
         team_b = make_team(2, "B", 2, picks={"Nuke": 0.9})
         available_maps = list(DEFAULT_MAP_POOL)
 
-        _remove_bans(available_maps, team_a, team_b, 1, use_first_ban=True)
+        _remove_bans(available_maps, team_a, team_b, 1, veto_temperature=0, use_first_ban=True)
 
         self.assertNotIn("Nuke", available_maps)
         self.assertIn("Ancient", available_maps)
@@ -122,7 +124,7 @@ class VetoTests(unittest.TestCase):
         team_b = make_team(2, "B", 2, picks={"Nuke": 0.9})
         available_maps = ["Dust2", "Nuke", "Mirage"]
 
-        _remove_bans(available_maps, team_a, team_b, 1, use_first_ban=True)
+        _remove_bans(available_maps, team_a, team_b, 1, veto_temperature=0, use_first_ban=True)
 
         self.assertNotIn("Nuke", available_maps)
         self.assertIn("Dust2", available_maps)
@@ -132,7 +134,7 @@ class VetoTests(unittest.TestCase):
         team_b = make_team(2, "B", 2)
         available_maps = ["Mirage", "Dust2", "Inferno"]
 
-        _remove_bans(available_maps, team_a, team_b, 1, use_first_ban=True)
+        _remove_bans(available_maps, team_a, team_b, 1, veto_temperature=0, use_first_ban=True)
 
         self.assertNotIn("Dust2", available_maps)
         self.assertIn("Mirage", available_maps)
@@ -142,7 +144,7 @@ class VetoTests(unittest.TestCase):
         team_b = make_team(2, "B", 2)
         available_maps = ["Dust2", "Ancient"]
 
-        selected = _pick_map(available_maps, team_a, team_b)
+        selected = _pick_map(available_maps, team_a, team_b, veto_temperature=0)
 
         self.assertEqual(selected, "Dust2")
 
@@ -196,9 +198,45 @@ class VetoTests(unittest.TestCase):
         team_a = make_team(1, "A", 1)
         team_b = make_team(2, "B", 2)
 
-        maps = bo3_veto_maps(team_a, team_b, DEFAULT_MAP_POOL)
+        maps = bo3_veto_maps(
+            team_a,
+            team_b,
+            DEFAULT_MAP_POOL,
+            model_params=ModelParams(veto_temperature=0),
+        )
 
         self.assertEqual(maps, ("Dust2", "Inferno", "Overpass"))
+
+    def test_softmax_veto_is_reproducible_with_same_seed(self) -> None:
+        team_a = make_team(1, "A", 1, picks={"Dust2": 0.4, "Mirage": 0.4})
+        team_b = make_team(2, "B", 2, picks={"Inferno": 0.4, "Nuke": 0.4})
+        params = ModelParams(veto_temperature=0.2)
+
+        first = bo3_veto_maps(team_a, team_b, DEFAULT_MAP_POOL, random.Random(7), params)
+        second = bo3_veto_maps(team_a, team_b, DEFAULT_MAP_POOL, random.Random(7), params)
+
+        self.assertEqual(first, second)
+
+    def test_softmax_temperature_can_change_veto_result(self) -> None:
+        team_a = make_team(1, "A", 1, picks={"Dust2": 0.4, "Mirage": 0.4})
+        team_b = make_team(2, "B", 2, picks={"Inferno": 0.4, "Nuke": 0.4})
+
+        deterministic = bo3_veto_maps(
+            team_a,
+            team_b,
+            DEFAULT_MAP_POOL,
+            random.Random(2),
+            ModelParams(veto_temperature=0),
+        )
+        randomized = bo3_veto_maps(
+            team_a,
+            team_b,
+            DEFAULT_MAP_POOL,
+            random.Random(2),
+            ModelParams(veto_temperature=10.0),
+        )
+
+        self.assertNotEqual(deterministic, randomized)
 
     def test_simulation_is_reproducible_with_same_seed(self) -> None:
         team_a = make_team(1, "A", 1, {"Dust2": 0.7, "Mirage": 0.6})

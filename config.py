@@ -17,6 +17,9 @@ from typing import Any, Callable, Dict, List, Tuple
 # 评分系统权重配置。这里仍保留为全局常量，方便快速调参。
 VRS_WEIGHT = 0.7  # Valve 评分系统权重
 HLTV_WEIGHT = 0.3  # HLTV 评分系统权重
+DEFAULT_MAP_ADJUSTMENT_WEIGHT = 0.20
+DEFAULT_VETO_TEMPERATURE = 0.15
+DEFAULT_BAYES_PRIOR_MAPS = 5.0
 
 # 兼容旧调用的默认 sigma。真实模拟时优先使用 major_stage.json 中的 sigma。
 SIGMA = 349.2
@@ -37,6 +40,15 @@ DEFAULT_MAP_POOL = (
     "Ancient",
     "Anubis",
 )
+
+
+@dataclass(frozen=True)
+class ModelParams:
+    """Tunable model parameters that sit outside rating weights and sigma."""
+
+    map_adjustment_weight: float = DEFAULT_MAP_ADJUSTMENT_WEIGHT
+    veto_temperature: float = DEFAULT_VETO_TEMPERATURE
+    bayes_prior_maps: float = DEFAULT_BAYES_PRIOR_MAPS
 
 
 @dataclass(frozen=True)
@@ -84,6 +96,7 @@ class TournamentConfig:
     sigma: Tuple[float, ...]
     weights: Tuple[float, ...]
     map_pool: Tuple[str, ...]
+    model_params: ModelParams
     teams: Tuple[Team, ...]
 
 
@@ -167,6 +180,37 @@ def _validate_weights(weights: Tuple[float, ...]) -> None:
         raise ValueError("valve 和 hltv 的权重不能同时为 0")
 
 
+def _validate_non_negative_float(field_name: str, value: Any) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"model_params.{field_name} must be a non-negative number") from exc
+    if parsed < 0:
+        raise ValueError(f"model_params.{field_name} must be a non-negative number")
+    return parsed
+
+
+def _read_model_params(data: Dict[str, Any]) -> ModelParams:
+    raw_params = data.get("model_params") or data.get("model") or {}
+    if not isinstance(raw_params, dict):
+        raise ValueError("model_params must be an object")
+
+    return ModelParams(
+        map_adjustment_weight=_validate_non_negative_float(
+            "map_adjustment_weight",
+            raw_params.get("map_adjustment_weight", DEFAULT_MAP_ADJUSTMENT_WEIGHT),
+        ),
+        veto_temperature=_validate_non_negative_float(
+            "veto_temperature",
+            raw_params.get("veto_temperature", DEFAULT_VETO_TEMPERATURE),
+        ),
+        bayes_prior_maps=_validate_non_negative_float(
+            "bayes_prior_maps",
+            raw_params.get("bayes_prior_maps", DEFAULT_BAYES_PRIOR_MAPS),
+        ),
+    )
+
+
 def _read_team_seed(team_name: str, team_data: Dict[str, Any]) -> int:
     """读取并校验队伍 seed，避免配置错误变成难懂的 KeyError。"""
     if "seed" not in team_data:
@@ -248,6 +292,60 @@ def _validate_maps_played(team_name: str, map_name: str, value: Any) -> int:
     return value
 
 
+def _clamp_unit(value: float) -> float:
+    return min(max(value, 0.0), 1.0)
+
+
+def bayesian_win_rate(win_rate: float, maps_played: int, prior_maps: float = DEFAULT_BAYES_PRIOR_MAPS) -> float:
+    if maps_played <= 0:
+        return 0.5
+    if prior_maps <= 0:
+        return win_rate
+    wins = win_rate * maps_played
+    return (wins + 0.5 * prior_maps) / (maps_played + prior_maps)
+
+
+def map_strength_from_stats(
+    win_rate: float,
+    maps_played: int,
+    pick_rate: float,
+    ban_rate: float,
+    bayes_prior_maps: float = DEFAULT_BAYES_PRIOR_MAPS,
+    missing: bool = False,
+) -> float:
+    if missing:
+        return 0.0
+
+    shrunk_wr_percent = bayesian_win_rate(win_rate, maps_played, bayes_prior_maps) * 100
+    pick_percent = pick_rate * 100
+    ban_percent = ban_rate * 100
+
+    score = shrunk_wr_percent * 0.55
+    score += pick_percent * 0.25
+    score -= ban_percent * 0.20
+
+    if maps_played >= 10:
+        score += 8
+    elif maps_played >= 5:
+        score += 4
+    elif maps_played <= 2:
+        score -= 8
+
+    return _clamp_unit(score / 100)
+
+
+def _is_missing_map_stats(
+    win_rate: float,
+    maps_played: int,
+    pick_rate: float,
+    ban_rate: float,
+    raw_stats: Dict[str, Any],
+) -> bool:
+    if raw_stats.get("missing") is True:
+        return True
+    return maps_played == 0 and win_rate == 0.0 and pick_rate == 0.0 and ban_rate == 1.0
+
+
 def _validate_team_map_name(team_name: str, map_name: Any) -> str:
     if not isinstance(map_name, str) or not map_name.strip():
         raise ValueError(f"Team {team_name!r} has an invalid map name: {map_name!r}")
@@ -258,6 +356,7 @@ def _read_team_map_stats(
     team_name: str,
     team_data: Dict[str, Any],
     map_pool: Tuple[str, ...],
+    model_params: ModelParams,
 ) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, float], Dict[str, float], Dict[str, int]]:
     """Read optional per-map stats, defaulting missing pool maps to neutral history."""
     map_strengths = {map_name: 0.5 for map_name in map_pool}
@@ -277,12 +376,6 @@ def _read_team_map_stats(
                 raise ValueError(
                     f"Team {team_name!r} map {map_name!r} map_stats entry must be an object"
                 )
-            map_strengths[map_name] = _validate_map_stat(
-                team_name,
-                map_name,
-                "strength",
-                raw_stats.get("strength", 0.5),
-            )
             map_win_rates[map_name] = _validate_map_stat(
                 team_name,
                 map_name,
@@ -306,6 +399,28 @@ def _read_team_map_stats(
                 map_name,
                 raw_stats.get("maps_played", 0),
             )
+            if "win_rate" in raw_stats and "maps_played" in raw_stats:
+                map_strengths[map_name] = map_strength_from_stats(
+                    map_win_rates[map_name],
+                    map_played_counts[map_name],
+                    map_pick_rates[map_name],
+                    map_ban_rates[map_name],
+                    model_params.bayes_prior_maps,
+                    missing=_is_missing_map_stats(
+                        map_win_rates[map_name],
+                        map_played_counts[map_name],
+                        map_pick_rates[map_name],
+                        map_ban_rates[map_name],
+                        raw_stats,
+                    ),
+                )
+            else:
+                map_strengths[map_name] = _validate_map_stat(
+                    team_name,
+                    map_name,
+                    "strength",
+                    raw_stats.get("strength", 0.5),
+                )
 
         return map_strengths, map_win_rates, map_pick_rates, map_ban_rates, map_played_counts
 
@@ -351,6 +466,7 @@ def load_tournament_config(file_path: str | Path) -> TournamentConfig:
 
     system_names = _ordered_system_names(systems_data)
     map_pool = _read_map_pool(data)
+    model_params = _read_model_params(data)
 
     # sigma 按 systems 顺序读取；缺失时回退到兼容旧代码的默认 SIGMA。
     sigma_data = data.get("sigma", {})
@@ -388,6 +504,7 @@ def load_tournament_config(file_path: str | Path) -> TournamentConfig:
             team_name,
             team_data,
             map_pool,
+            model_params,
         )
         teams.append(
             Team(
@@ -410,6 +527,7 @@ def load_tournament_config(file_path: str | Path) -> TournamentConfig:
         sigma=sigma,
         weights=weights,
         map_pool=map_pool,
+        model_params=model_params,
         teams=tuple(teams),
     )
 
