@@ -1,12 +1,12 @@
 {
   "metadata": {
     "event": "IEM Cologne Major 2026 Stage 1",
-    "updated_at": "2026-05-25",
+    "updated_at": "2026-05-26",
     "notes": [
       "参赛队伍参考 HLTV 的 IEM Cologne Major 2026 Stage 1 赛事页。",
       "seed 用于匹配 HLTV 公布的 Stage 1 首轮对阵顺序。",
-      "valve 使用 HLTV Valve Global Ranking 2026-05-25 points。",
-      "hltv 使用 HLTV World Ranking 2026-05-18 points（2026-05-25 查询时最新可用）。",
+      "valve 使用 HLTV Valve Global Ranking 2026-05-26 points。",
+      "hltv 使用 HLTV World Ranking 2026-05-25 points。",
       "map_stats uses user-provided HLTV past-3-month team map data for the current map_pool: WR, Pick %, Ban %, and W-L.",
       "strength is recalculated with Bayesian WR shrinkage from WR, maps_played, Pick %, and Ban %, then divided by 100 and clamped to [0, 1].",
       "win_rate stores WR as a decimal, maps_played stores wins plus losses, and pick_rate/ban_rate store HLTV percentages as decimals.",
@@ -40,7 +40,7 @@
     "GamerLegion": {
       "seed": 1,
       "valve": 1726,
-      "hltv": 214,
+      "hltv": 258,
       "map_stats": {
         "Dust2": {
           "strength": 0.0,
@@ -95,8 +95,8 @@
     },
     "B8": {
       "seed": 2,
-      "valve": 1593,
-      "hltv": 122,
+      "valve": 1591,
+      "hltv": 171,
       "map_stats": {
         "Dust2": {
           "strength": 0.325,
@@ -151,8 +151,8 @@
     },
     "BetBoom": {
       "seed": 3,
-      "valve": 1563,
-      "hltv": 120,
+      "valve": 1562,
+      "hltv": 136,
       "map_stats": {
         "Dust2": {
           "strength": 0.42,
@@ -207,8 +207,8 @@
     },
     "HEROIC": {
       "seed": 4,
-      "valve": 1449,
-      "hltv": 69,
+      "valve": 1447,
+      "hltv": 77,
       "map_stats": {
         "Dust2": {
           "strength": 0.484,
@@ -263,8 +263,8 @@
     },
     "BIG": {
       "seed": 5,
-      "valve": 1414,
-      "hltv": 47,
+      "valve": 1415,
+      "hltv": 42,
       "map_stats": {
         "Dust2": {
           "strength": 0.298,
@@ -319,8 +319,8 @@
     },
     "M80": {
       "seed": 6,
-      "valve": 1380,
-      "hltv": 66,
+      "valve": 1379,
+      "hltv": 89,
       "map_stats": {
         "Dust2": {
           "strength": 0.357,
@@ -375,8 +375,8 @@
     },
     "MIBR": {
       "seed": 7,
-      "valve": 1546,
-      "hltv": 52,
+      "valve": 1543,
+      "hltv": 126,
       "map_stats": {
         "Dust2": {
           "strength": 0.0,
@@ -431,8 +431,8 @@
     },
     "SINNERS": {
       "seed": 8,
-      "valve": 1381,
-      "hltv": 58,
+      "valve": 1382,
+      "hltv": 51,
       "map_stats": {
         "Dust2": {
           "strength": 0.372,
@@ -487,8 +487,8 @@
     },
     "NRG": {
       "seed": 9,
-      "valve": 1276,
-      "hltv": 41,
+      "valve": 1271,
+      "hltv": 49,
       "map_stats": {
         "Dust2": {
           "strength": 0.048,
@@ -544,7 +544,7 @@
     "TYLOO": {
       "seed": 10,
       "valve": 1390,
-      "hltv": 47,
+      "hltv": 63,
       "map_stats": {
         "Dust2": {
           "strength": 0.0,
@@ -599,8 +599,8 @@
     },
     "Gaimin Gladiators": {
       "seed": 11,
-      "valve": 1239,
-      "hltv": 24,
+      "valve": 1237,
+      "hltv": 19,
       "map_stats": {
         "Dust2": {
           "strength": 0.518,
@@ -655,8 +655,8 @@
     },
     "Sharks": {
       "seed": 12,
-      "valve": 1284,
-      "hltv": 19,
+      "valve": 1282,
+      "hltv": 22,
       "map_stats": {
         "Dust2": {
           "strength": 0.0,
@@ -711,8 +711,8 @@
     },
     "Liquid": {
       "seed": 13,
-      "valve": 1312,
-      "hltv": 62,
+      "valve": 1309,
+      "hltv": 75,
       "map_stats": {
         "Dust2": {
           "strength": 0.324,
@@ -767,8 +767,8 @@
     },
     "Lynn Vision": {
       "seed": 14,
-      "valve": 1441,
-      "hltv": 24,
+      "valve": 1442,
+      "hltv": 51,
       "map_stats": {
         "Dust2": {
           "strength": 0.679,
@@ -824,7 +824,7 @@
     "THUNDER dOWNUNDER": {
       "seed": 15,
       "valve": 1211,
-      "hltv": 12,
+      "hltv": 15,
       "map_stats": {
         "Dust2": {
           "strength": 0.359,
@@ -879,8 +879,8 @@
     },
     "FlyQuest": {
       "seed": 16,
-      "valve": 1132,
-      "hltv": 17,
+      "valve": 1130,
+      "hltv": 21,
       "map_stats": {
         "Dust2": {
           "strength": 0.508,
