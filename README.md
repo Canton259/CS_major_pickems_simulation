@@ -8,16 +8,16 @@ This is a Python program for simulating CS2 Major Swiss stages. The current defa
 ## Version
 ## 版本说明
 
-Current release: **v0.2.1**
+Current release: **v0.2.2**
 
-当前版本：**v0.2.1**
+当前版本：**v0.2.2**
 
-v0.2.1 updates the IEM Cologne Major 2026 Stage 1 data model and default inputs:
+v0.2.2 adds historical backtesting, Bayesian map-strength shrinkage, softmax veto sampling, and refreshed IEM Cologne Major 2026 Stage 1 rating inputs:
 
-v0.2.1 更新了 IEM Cologne Major 2026 Stage 1 的默认数据和地图模型：
+v0.2.2 新增历史回测、地图强度贝叶斯收缩、softmax veto 随机化，并刷新 IEM Cologne Major 2026 Stage 1 默认评分输入：
 
-- Updated team `valve` values to HLTV Valve Global Ranking points from 2026-05-25 / 将队伍 `valve` 值更新为 HLTV Valve Global Ranking 2026-05-25 points
-- Rechecked `hltv` values against the latest available HLTV World Ranking, which remains 2026-05-18 at update time / 重新核对 `hltv` 值；更新时最新可用 HLTV World Ranking 仍为 2026-05-18
+- Updated team `valve` values to HLTV Valve Global Ranking points from 2026-05-26 / 将队伍 `valve` 值更新为 HLTV Valve Global Ranking 2026-05-26 points
+- Updated team `hltv` values to HLTV World Ranking points from 2026-05-25 / 将队伍 `hltv` 值更新为 HLTV World Ranking 2026-05-25 points
 - Uses `VRS_WEIGHT = 0.7` and `HLTV_WEIGHT = 0.3` for the default rating blend / 默认评分融合使用 `VRS_WEIGHT = 0.7` 和 `HLTV_WEIGHT = 0.3`
 - Replaced per-map First Pick / First Ban fields with `win_rate`, `pick_rate`, `ban_rate`, and `maps_played` from the user-provided HLTV past-3-month map data / 使用用户提供的 HLTV 近 3 个月地图数据替代 First Pick / First Ban 字段
 - Infers each team's opening ban from the highest `ban_rate`; maps with no recent sample are stored with `ban_rate = 1.0` / 每队首 ban 由最高 `ban_rate` 推导；无近期样本地图写入 `ban_rate = 1.0`
